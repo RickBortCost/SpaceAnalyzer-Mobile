@@ -12,9 +12,10 @@ android {
         applicationId = "it.spaceanalyzer.mobile"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-m1"
-        ndk { abiFilters += "arm64-v8a" }
+        versionCode = 2
+        versionName = "0.1.1-m1"
+        // The same APK runs on the Note9 and the Android 10 CI emulator.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val signingPath = providers.environmentVariable("SAM_KEYSTORE_PATH").orNull

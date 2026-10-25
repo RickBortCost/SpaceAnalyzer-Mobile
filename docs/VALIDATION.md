@@ -18,3 +18,6 @@
 
 ## Protocolli futuri
 Non applicabile alla M1: compilazione/caricamento JNI ARM64; certificati trusted/unknown/expired/hostname mismatch; conversioni tutti i tipi e UInt64; browse continuation; callback/timestamp/qualità/sequence/revised intervals; perdita sessione e backoff; rifiuto host key SSH; parser su fixture FreeBSD reali; durata e memoria limitata; revoca credenziali read-only; test delle operazioni vietate. Nessuna di queste prove è stata eseguita.
+
+## Gate installazione CI dalla 0.1.1
+`scripts/test-android10-install.sh` installa il vero APK della distribuzione su API 29, controlla `Success`, avvia MainActivity e verifica il testo della schermata. L'emulatore è x86_64; lo stesso APK contiene anche arm64-v8a. I risultati vanno letti nella specifica esecuzione GitHub Actions, non dedotti dal solo passaggio assembleDebug.

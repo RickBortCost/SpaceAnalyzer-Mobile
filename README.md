@@ -1,4 +1,4 @@
-# Space Analyzer Mobile — 0.1.0 / M1
+# Space Analyzer Mobile — 0.1.1 / M1
 
 App Android nativa Kotlin + Compose per il primo passo della diagnostica Beckhoff CX2062.
 **Stato: APK Debug Milestone 1 compilato il 25 ottobre 2026; 6 test JUnit passati e lint senza errori. App non ancora validata sul telefono.**
@@ -52,7 +52,7 @@ Il workflow `.github/workflows/android.yml` installa SDK/NDK/CMake, usa il wrapp
 Impostare fuori dal repository `SAM_KEYSTORE_PATH`, `SAM_STORE_PASSWORD`, `SAM_KEY_ALIAS`, `SAM_KEY_PASSWORD`, quindi eseguire `gradlew.bat assembleRelease`. Senza queste variabili la release resta non firmata. Non condividere chiavi, password o file keystore. La debug key generata dalla toolchain serve soltanto ai test.
 
 ## Installazione Note9 e collegamento CX2062
-1. Dopo una build riuscita scaricare l'artifact `SpaceAnalyzerMobile-m1-debug` da Actions, estrarre l'APK e trasferirlo sul Note9.
+1. Dopo una build riuscita scaricare l'artifact `SpaceAnalyzerMobile-0.1.1-android10-debug` da Actions, estrarre l'APK e trasferirlo sul Note9.
 2. Nelle impostazioni Samsung autorizzare l'installazione da sorgenti sconosciute per l'app usata per aprire il file; installare e aprire Space Analyzer Mobile. Nessun account Play Developer richiesto.
 3. Collegare USB-C/Ethernet e cavo RJ45 al CX2062; verificare la comparsa di Ethernet nella pagina Rete.
 4. Se l'IPC è **già** 192.168.50.20/24, impostare il telefono a 192.168.50.10/24 dalle impostazioni Ethernet Samsung, ove presenti. Non usare un IP già assegnato. I campi dell'app non applicano la configurazione Android.
@@ -65,3 +65,6 @@ Consultare `docs/STATUS.md`, `docs/VALIDATION.md` e `docs/ARCHITECTURE.md`. Il r
 
 ## Risultati build locale
 `./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug`: BUILD SUCCESSFUL. Sei test JUnit e cinque controlli strutturali passati. Lint: zero errori, quattro warning (versione più recente Coroutines disponibile, ABI ChromeOS assente, regole backup Android 12, icona applicazione assente). Firma APK v2 verificata. Consultare `docs/apk-verification.txt`, `docs/build-attempt.txt`, `docs/junit-results.xml` e `docs/lint-results-debug.txt`.
+
+## Verifica installazione Android 10 — 0.1.1
+Il pacchetto include arm64-v8a (Note9) e x86_64 (emulatore). La CI deve verificare la firma per API 29, installare lo stesso APK distribuito su un emulatore Android 10 e verificare che la schermata principale sia visibile prima di pubblicarlo. Log di installazione, screenshot e SHA-256 sono nell’artifact validation-reports, cartella android10-install. Questo test non sostituisce il collaudo sul Note9 Samsung né diagnostica automaticamente il messaggio generico «App non installata».
