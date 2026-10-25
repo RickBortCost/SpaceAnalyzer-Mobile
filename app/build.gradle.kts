@@ -1,0 +1,51 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+android {
+    namespace = "it.spaceanalyzer.mobile"
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
+    ndkVersion = "27.2.12479018"
+    defaultConfig {
+        applicationId = "it.spaceanalyzer.mobile"
+        minSdk = 29
+        targetSdk = 36
+        versionCode = 1
+        versionName = "0.1.0-m1"
+        ndk { abiFilters += "arm64-v8a" }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    val signingPath = providers.environmentVariable("SAM_KEYSTORE_PATH").orNull
+    if (signingPath != null) {
+        signingConfigs.create("privateRelease") {
+            storeFile = file(signingPath)
+            storePassword = providers.environmentVariable("SAM_STORE_PASSWORD").get()
+            keyAlias = providers.environmentVariable("SAM_KEY_ALIAS").get()
+            keyPassword = providers.environmentVariable("SAM_KEY_PASSWORD").get()
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (signingPath != null) signingConfig = signingConfigs.getByName("privateRelease")
+        }
+    }
+    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    buildFeatures { compose = true }
+}
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+
+dependencies {
+    implementation(platform("androidx.compose:compose-bom:2025.11.01"))
+    implementation("androidx.activity:activity-compose:1.12.0")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    testImplementation("junit:junit:4.13.2")
+}

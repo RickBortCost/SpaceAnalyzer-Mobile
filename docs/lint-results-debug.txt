@@ -1,0 +1,58 @@
+/workspace/SpaceAnalyzer-Mobile/app/build.gradle.kts:49: Warning: A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.10.2 is available: 1.11.0 [NewerVersionAvailable]
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "NewerVersionAvailable":
+   This detector checks with a central repository to see if there are newer
+   versions available for the dependencies used by this project. This is
+   similar to the GradleDependency check, which checks for newer versions
+   available in the Android SDK tools and libraries, but this works with any
+   MavenCentral dependency, and connects to the library every time, which
+   makes it more flexible but also much slower.
+
+/workspace/SpaceAnalyzer-Mobile/app/build.gradle.kts:17: Warning: Missing x86_64 ABI support for ChromeOS [ChromeOsAbiSupport]
+        ndk { abiFilters += "arm64-v8a" }
+                            ~~~~~~~~~~~
+
+   Explanation for issues of type "ChromeOsAbiSupport":
+   To properly support ChromeOS, your Android application should have an x86
+   and/or x86_64 binary as part of the build configuration. To fix the issue,
+   ensure your files are properly optimized for ARM; the binary translator
+   will then ensure compatibility with x86. Alternatively, add an abiSplit for
+   x86 within your build.gradle file and create the required x86
+   dependencies.
+
+   https://developer.android.com/ndk/guides/abis
+
+/workspace/SpaceAnalyzer-Mobile/app/src/main/AndroidManifest.xml:5: Warning: The attribute android:allowBackup is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute android:dataExtractionRules specifying an @xml resource which configures cloud backups and device transfers on Android 12 and higher. [DataExtractionRules]
+        android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false">
+                             ~~~~~
+
+   Explanation for issues of type "DataExtractionRules":
+   Before Android 12, the attributes android:allowBackup and
+   android:fullBackupContent were used to configure all forms of backup,
+   including cloud backups, device-to-device transfers and adb backup.
+
+   In Android 12 and higher, these attributes have been deprecated and will
+   only apply to cloud backups. You should instead use the attribute
+   android:dataExtractionRules, specifying an @xml resource that configures
+   which files to back up, for cloud backups and for device-to-device
+   transfers, separately. If your minSdkVersion supports older versions,
+   you'll still want to specify an android:fullBackupContent resource if the
+   default behavior is not right for your app.
+
+   https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   https://goo.gle/DataExtractionRules
+
+/workspace/SpaceAnalyzer-Mobile/app/src/main/AndroidManifest.xml:4: Warning: Should explicitly set android:icon, there is no default [MissingApplicationIcon]
+    <application android:theme="@style/AppTheme" android:label="Space Analyzer Mobile"
+     ~~~~~~~~~~~
+
+   Explanation for issues of type "MissingApplicationIcon":
+   You should set an icon for the application as whole because there is no
+   default. This attribute must be set as a reference to a drawable resource
+   containing the image (for example @drawable/icon).
+
+   https://developer.android.com/studio/publish/preparing#publishing-configure
+
+0 errors, 4 warnings

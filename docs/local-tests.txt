@@ -1,0 +1,10 @@
+test_android10_and_ci_build_are_declared (test_source_contract.SourceContract.test_android10_and_ci_build_are_declared) ... ok
+test_manifest_exposes_only_launcher_and_basic_permissions (test_source_contract.SourceContract.test_manifest_exposes_only_launcher_and_basic_permissions) ... ok
+test_no_embedded_credentials_or_fake_apk (test_source_contract.SourceContract.test_no_embedded_credentials_or_fake_apk) ... ok
+test_no_remote_mutation_or_shell_entrypoints (test_source_contract.SourceContract.test_no_remote_mutation_or_shell_entrypoints) ... ok
+test_offline_ethernet_binding_precedes_connect (test_source_contract.SourceContract.test_offline_ethernet_binding_precedes_connect) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.006s
+
+OK

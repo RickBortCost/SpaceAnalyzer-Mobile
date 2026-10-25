@@ -1,0 +1,770 @@
+# CODEX — SPACE ANALYZER MOBILE ANDROID v0.1
+
+## 1. Obiettivo generale
+
+Sviluppa un'applicazione Android nativa denominata **Space Analyzer Mobile**, dedicata alla diagnostica industriale di IPC Beckhoff.
+
+Il primo dispositivo target è:
+
+- Smartphone: Samsung Galaxy Note9.
+- Sistema operativo: Android 10.
+- Architettura: ARM64.
+- IPC industriale: Beckhoff CX2062.
+- Sistema operativo IPC: TwinCAT/BSD basato su FreeBSD.
+- PLC Runtime: TwinCAT 3.
+- Server OPC UA: Beckhoff TF6100 già installato e licenziato.
+
+L'applicazione deve consentire di collegare direttamente il Samsung Note9 al CX2062 attraverso un adattatore USB-C/Ethernet RJ45.
+
+**L'applicazione deve funzionare interamente offline, senza PC intermedi, senza bridge OPC UA e senza installare software aggiuntivo sul Beckhoff.**
+
+Deve permettere il monitoraggio delle variabili PLC attraverso OPC UA e la diagnostica del sistema operativo attraverso SSH.
+
+### Requisito fondamentale
+
+L'app deve essere esclusivamente READ-ONLY.
+
+Sono vietate:
+
+- Scrittura di variabili OPC UA.
+- Esecuzione di metodi OPC UA.
+- Modifica della configurazione PLC.
+- Modifica dello stato TwinCAT.
+- Riavvio o arresto dell'IPC.
+- Modifiche a file, utenti, rete e servizi FreeBSD.
+- Esecuzione di comandi SSH arbitrari.
+
+Non implementare queste funzionalità neppure nel backend o nelle librerie applicative.
+
+Utilizzare, ove possibile, credenziali server con privilegi effettivamente limitati alla lettura.
+
+---
+
+## 2. Architettura hardware
+
+Schema:
+
+Samsung Galaxy Note9
+→ USB-C
+→ Adattatore USB-C/Ethernet
+→ Cavo RJ45
+→ Beckhoff CX2062
+
+Nessuno switch o router è necessario se entrambi i dispositivi possiedono indirizzi IPv4 compatibili.
+
+Configurazione iniziale di esempio:
+
+| Parametro | Valore |
+|---|---|
+| IP Beckhoff | 192.168.50.20 |
+| IP Android | 192.168.50.10 |
+| Subnet | 255.255.255.0 |
+| OPC UA | opc.tcp://192.168.50.20:4840 |
+| SSH | 192.168.50.20:22 |
+
+Tutti i parametri devono essere modificabili e salvabili nell'app.
+
+### Gestione Ethernet Android
+
+Implementare una schermata Network Diagnostics.
+
+Utilizzare le API Android ConnectivityManager, NetworkCapabilities e LinkProperties per:
+
+- Rilevare la presenza dell'adattatore USB/Ethernet.
+- Visualizzare lo stato della connessione.
+- Identificare l'interfaccia Ethernet.
+- Leggere indirizzo IP, subnet, gateway e DNS disponibili.
+- Visualizzare lo stato della rete Ethernet separatamente da Wi-Fi e rete cellulare.
+- Verificare la raggiungibilità TCP di OPC UA e SSH.
+- Associare, quando necessario e consentito dalle API, i socket alla rete Ethernet selezionata.
+
+Non presupporre che l'IP Ethernet possa essere configurato programmaticamente.
+
+L'app Android non deve richiedere root, ADB permanente o privilegi di sistema.
+
+Se la configurazione IP statica non è disponibile, mostrare istruzioni chiare per configurarla dalle impostazioni Samsung oppure predisporre un DHCP su una rete di prova separata.
+
+Non modificare automaticamente le impostazioni di rete del CX2062.
+
+---
+
+## 3. Tecnologie e ambiente di sviluppo
+
+Utilizzare:
+
+| Componente | Tecnologia |
+|---|---|
+| Linguaggio | Kotlin |
+| UI | Jetpack Compose |
+| Architettura | MVVM + Repository |
+| Concorrenza | Kotlin Coroutines / Flow |
+| OPC UA | open62541 tramite Android NDK/JNI |
+| SSH | Libreria Java/Kotlin Android compatibile |
+| Grafici | Canvas Compose o libreria mantenuta |
+| Persistenza | DataStore / Room |
+| Credenziali | Android Keystore |
+| Build | Gradle |
+| IDE | Android Studio |
+| Distribuzione | APK |
+| CI/CD | GitHub Actions |
+
+Configurare:
+
+- minSdk = 29 (Android 10).
+- targetSdk conforme alla toolchain Android selezionata.
+- Supporto ABI arm64-v8a.
+- Orientamento verticale e orizzontale.
+- Tema chiaro e scuro.
+- Utilizzo completamente offline dopo l'installazione.
+
+Verificare e fissare versioni compatibili di Kotlin, Android Gradle Plugin, Gradle, Compose e NDK.
+
+Non utilizzare versioni obsolete delle librerie solo per semplificare la compilazione.
+
+### Integrazione OPC UA
+
+Preferire una versione stabile e mantenuta di open62541.
+
+Compilarla per Android ARM64 mediante NDK e CMake.
+
+Implementare un wrapper JNI con gestione corretta di:
+
+- Allocazione e rilascio della memoria.
+- Threading.
+- Sessioni OPC UA.
+- Conversione dei tipi.
+- Callback delle sottoscrizioni.
+- Chiusura e riconnessione.
+
+Abilitare i componenti necessari per la sicurezza crittografica e le subscription.
+
+Non accettare una soluzione OPC UA priva di cifratura come implementazione finale.
+
+Non utilizzare esempi storici open62541 0.3 come dipendenza di produzione.
+
+Prima di procedere, verificare che il codice nativo venga realmente compilato per Android ARM64.
+
+---
+
+## 4. Client OPC UA Beckhoff TF6100
+
+Creare un client completo in sola lettura.
+
+### Connessione
+
+Implementare:
+
+1. Configurazione endpoint.
+2. Discovery endpoint OPC UA.
+3. Visualizzazione delle policy disponibili.
+4. Selezione Security Mode.
+5. Supporto SignAndEncrypt.
+6. Gestione certificati.
+7. Autenticazione con le modalità supportate.
+8. Connessione e disconnessione.
+9. Riconnessione automatica.
+10. Diagnostica degli errori di sessione.
+
+Supportare Basic256Sha256 ove disponibile e negoziato correttamente.
+
+Gestire i certificati sconosciuti mediante verifica esplicita dell'impronta e autorizzazione consapevole dell'utente.
+
+Non disabilitare la validazione dei certificati.
+
+### Navigazione OPC UA
+
+Creare un OPC UA Explorer simile, nelle funzioni essenziali, a UA Expert.
+
+Implementare:
+
+- Browsing gerarchico.
+- Espansione e chiusura dei nodi.
+- Caricamento progressivo.
+- Ricerca per nome.
+- Ricerca per NodeId.
+- Visualizzazione del BrowseName.
+- Visualizzazione del DisplayName.
+- DataType.
+- AccessLevel.
+- ValueRank.
+- UnitEngineering se disponibile.
+- SourceTimestamp.
+- ServerTimestamp.
+- StatusCode.
+- Valore corrente.
+
+Evitare di caricare l'intero namespace in memoria all'apertura.
+
+Utilizzare caricamento asincrono dei livelli e, quando necessario, BrowseNext con gestione dei continuation point.
+
+### Tipi di dato
+
+Supportare almeno:
+
+- Boolean.
+- Byte / SByte.
+- UInt16 / Int16.
+- UInt32 / Int32.
+- UInt64 / Int64.
+- Float.
+- Double.
+- String.
+- DateTime.
+- Array numerici.
+- Enumeration.
+- ByteString.
+
+Per strutture complesse non supportate, mostrare un'indicazione leggibile senza causare crash.
+
+### Acquisizione live
+
+Implementare OPC UA Subscriptions e MonitoredItems.
+
+Intervalli richiesti configurabili:
+
+- 100 ms.
+- 250 ms.
+- 500 ms.
+- 1000 ms.
+
+Gli intervalli rappresentano richieste al server e non garanzie temporali.
+
+Visualizzare separatamente l'intervallo richiesto e quello revisionato/accettato dal server.
+
+Gestire:
+
+- PublishingInterval.
+- SamplingInterval.
+- QueueSize.
+- Deadband, quando applicabile.
+- Timestamp.
+- Qualità del dato.
+- SequenceNumber.
+- Perdita della sessione.
+- Timeout.
+- Riconnessione.
+
+Creare una gestione centralizzata delle subscription per evitare doppie sottoscrizioni allo stesso nodo.
+
+Non effettuare un nuovo browse quando non necessario.
+
+Non interrompere le acquisizioni attive navigando nell'Explorer.
+
+---
+
+## 5. Client SSH TwinCAT/BSD
+
+Sviluppare un client SSH indipendente da OPC UA.
+
+Utilizzare una libreria SSH Java/Kotlin effettivamente compatibile con Android 10, con supporto ad algoritmi di autenticazione e scambio chiavi moderni.
+
+Verificare la host key prima della connessione.
+
+Supportare:
+
+- Autenticazione username/password.
+- Autenticazione tramite chiave, se possibile.
+- Timeout.
+- Riconnessione.
+- Gestione errori.
+- Verifica dell'identità del server.
+
+Non implementare un terminale interattivo.
+
+### Diagnostica sistema operativo
+
+Acquisire esclusivamente informazioni diagnostiche tramite comandi di lettura FreeBSD.
+
+**Sistema**
+
+- Hostname.
+- Versione FreeBSD.
+- Versione TwinCAT/BSD disponibile.
+- Uptime.
+- Data e ora.
+- Stato generale del sistema.
+
+**CPU**
+
+- Utilizzo CPU.
+- Load average.
+- Numero di core.
+- Modello processore.
+- Temperatura, se disponibile.
+
+**Memoria**
+
+- RAM totale.
+- RAM libera.
+- RAM utilizzata.
+- Swap.
+
+**Storage**
+
+- Partizioni.
+- Spazio totale.
+- Spazio occupato.
+- Spazio disponibile.
+- Percentuale di utilizzo.
+
+**Rete**
+
+- Interfacce.
+- Indirizzi IP.
+- Link UP/DOWN.
+- Velocità e duplex, se disponibili.
+- Statistiche e contatori di errore.
+
+**TwinCAT**
+
+- Versione runtime.
+- Stato servizi.
+- Presenza processi.
+- Log diagnostici leggibili.
+- Informazioni AMS Net ID, se esposte tramite comandi diagnostici disponibili.
+
+Verificare realmente i comandi disponibili nella versione di TwinCAT/BSD.
+
+Non presumere che siano presenti strumenti GNU/Linux o comandi non supportati da FreeBSD.
+
+### Sicurezza SSH
+
+Implementare una whitelist di comandi statici di sola lettura.
+
+Non concatenare input dell'utente in comandi shell.
+
+Non usare sudo o account root come requisito standard.
+
+Disabilitare ogni interfaccia di comando arbitrario.
+
+Limitare frequenza e numero di comandi diagnostici per evitare carichi inutili sul CX2062.
+
+Impostare inizialmente un aggiornamento diagnostico ogni 2 secondi, regolabile.
+
+---
+
+## 6. Interfaccia grafica Android
+
+Progettare una UI professionale, compatta e ottimizzata per Samsung Galaxy Note9.
+
+Nome visualizzato:
+
+**Space Analyzer Mobile**
+
+Design:
+
+- Industrial dashboard.
+- Material 3.
+- Colori e tipografia professionali.
+- Dark mode.
+- Navigazione semplice con Bottom Navigation.
+- Pagine adattabili.
+- Indicatori leggibili.
+- Nessun elemento inutilmente animato.
+- Aggiornamenti senza flickering.
+- Layout compatibile con display da circa 6,4 pollici.
+
+### Pagina A — Overview
+
+Mostrare:
+
+- Nome dispositivo Beckhoff.
+- IP e hostname.
+- Connessione Ethernet.
+- Stato OPC UA.
+- Stato SSH.
+- Stato TwinCAT, se effettivamente determinabile.
+- CPU.
+- RAM.
+- Storage.
+- Uptime.
+- Errori attivi di comunicazione.
+
+Stati:
+
+- Connected.
+- Disconnected.
+- Connecting.
+- Warning.
+- Unknown.
+
+Non indicare TwinCAT RUN soltanto perché il server OPC UA risponde.
+
+### Pagina B — OPC UA Explorer
+
+Navigazione e lettura dei nodi.
+
+Supportare:
+
+- Tree view.
+- Ricerca.
+- Valori aggiornati.
+- Tipi di dato.
+- Timestamp.
+- Qualità.
+- Selezione segnali.
+- Aggiunta alla lista Monitor.
+- Aggiunta ai grafici.
+
+### Pagina C — Live Monitor
+
+Elenco dei segnali selezionati.
+
+Per ogni variabile mostrare:
+
+- Nome.
+- Alias.
+- Valore.
+- Unità.
+- Qualità.
+- Timestamp.
+- Stato aggiornamento.
+
+Evitare ricomposizioni eccessive dell'interfaccia Compose.
+
+### Pagina D — Trends
+
+Grafici dei segnali acquisiti tramite OPC UA.
+
+Implementare:
+
+- Più segnali contemporaneamente.
+- Buffer circolare in RAM.
+- Autoscale.
+- Zoom.
+- Pan.
+- Cursori.
+- Valori istantanei.
+- Pausa visualizzazione.
+- Ripristino Live.
+- Legenda.
+- Colori distinti per segnale.
+
+La pausa grafica non deve necessariamente interrompere le subscription OPC UA.
+
+Mantenere separata l'acquisizione dalla renderizzazione.
+
+Limitare il numero di punti disegnati in funzione della risoluzione per evitare inutili carichi CPU/GPU.
+
+Non implementare ancora registrazioni industriali complesse.
+
+### Pagina E — IPC Diagnostics
+
+Visualizzare:
+
+- CPU e RAM.
+- Disco.
+- Rete.
+- Sistema operativo.
+- TwinCAT.
+- Processi e servizi.
+- Informazioni diagnostiche.
+
+Gli errori SSH devono essere gestiti separatamente da OPC UA.
+
+### Pagina F — Settings
+
+Consentire la configurazione di:
+
+- Nome IPC.
+- IP CX2062.
+- Endpoint OPC UA.
+- Security Policy.
+- Credenziali.
+- Certificati.
+- Username SSH.
+- Chiavi SSH.
+- Timeout.
+- Intervalli di aggiornamento.
+- Tema.
+- Impostazioni Ethernet e diagnostica.
+
+Supportare più profili IPC Beckhoff.
+
+Non salvare password in chiaro.
+
+---
+
+## 7. Affidabilità e prestazioni
+
+Il progetto deve essere utilizzabile in ambito di manutenzione industriale.
+
+Requisiti:
+
+- Client OPC UA e SSH indipendenti.
+- Nessun blocco del main thread.
+- Retry con exponential backoff.
+- Riconnessione dopo perdita Ethernet.
+- Chiusura corretta delle sessioni.
+- Eliminazione delle subscription non più necessarie.
+- Gestione memoria JNI.
+- Assenza di memory leak noti.
+- Gestione passaggio background/foreground.
+- Segnalazione dati obsoleti.
+- Buffer limitati.
+- Log locali con rotazione.
+- Gestione delle eccezioni.
+
+Non prevedere che Android garantisca l'esecuzione continua in background.
+
+Non mantenere artificiosamente attive connessioni quando il sistema operativo le sospende, salvo un'eventuale futura modalità foreground esplicitamente richiesta.
+
+---
+
+## 8. Build e distribuzione APK
+
+Il progetto deve essere compilabile da PC Windows senza utilizzare macOS.
+
+Preparare:
+
+- Android Studio project.
+- Gradle Wrapper.
+- Android SDK configuration.
+- Android NDK.
+- CMake.
+- Dipendenze gestite e riproducibili.
+- Script di compilazione.
+- Test automatici.
+- GitHub Actions su runner Linux.
+
+Creare una pipeline che esegua:
+
+1. Setup JDK.
+2. Setup Android SDK.
+3. Installazione NDK e CMake.
+4. Compilazione open62541 ARM64.
+5. Compilazione Kotlin.
+6. Esecuzione dei test.
+7. Generazione APK Debug.
+8. Pubblicazione APK come GitHub Actions artifact.
+
+Comando di riferimento:
+
+`./gradlew assembleDebug`
+
+Preparare anche la configurazione per creare APK Release firmati con una chiave privata dell'utente.
+
+Non salvare keystore, password o credenziali nel repository.
+
+Il primo obiettivo è un **APK Debug realmente installabile sul Samsung Galaxy Note9**.
+
+Per l'installazione documentare:
+
+- Download APK.
+- Trasferimento sul telefono.
+- Autorizzazione a installare applicazioni dalla sorgente scelta.
+- Installazione.
+- Apertura.
+- Configurazione Ethernet.
+- Connessione al CX2062.
+
+Non richiedere Google Play Store né un account Google Play Developer.
+
+---
+
+## 9. Repository
+
+Organizzare il repository:
+
+SpaceAnalyzerMobile/
+- app/
+  - src/main/java/
+    - ui/
+    - viewmodel/
+    - model/
+    - navigation/
+    - networking/
+    - opcua/
+    - ssh/
+    - diagnostics/
+    - charts/
+    - settings/
+    - security/
+  - src/main/cpp/
+    - opcua_jni/
+    - CMakeLists.txt
+  - src/main/res/
+- native/
+  - open62541/
+- tests/
+- docs/
+- scripts/
+- .github/workflows/
+- gradle/
+- README.md
+
+Separare chiaramente:
+
+- UI.
+- Business logic.
+- Networking.
+- Client OPC UA.
+- Client SSH.
+- Diagnostica.
+- Configurazioni.
+- Persistenza.
+
+Utilizzare interfacce testabili e dependency injection dove opportuno, evitando framework superflui.
+
+---
+
+## 10. Milestone di sviluppo
+
+### Milestone 1 — Android + Ethernet
+
+Obiettivo:
+
+Ottenere un APK compilabile che si avvii sul Note9 e visualizzi:
+
+- Interfacce di rete.
+- Indirizzo IP Ethernet.
+- Stato adattatore.
+- Raggiungibilità CX2062.
+- Test TCP porta 4840.
+- Test TCP porta 22.
+
+Questa milestone deve funzionare senza OPC UA e SSH completi.
+
+### Milestone 2 — OPC UA reale
+
+Implementare:
+
+- open62541 Android.
+- JNI.
+- Sicurezza e certificati.
+- Connessione TF6100.
+- Browse.
+- Lettura variabile.
+- Subscription.
+- Disconnessione.
+
+Validare prima una variabile reale, poi estendere l'Explorer.
+
+### Milestone 3 — SSH reale
+
+Implementare:
+
+- Connessione SSH.
+- Autenticazione.
+- Verifica host key.
+- Whitelist diagnostica.
+- Uptime.
+- CPU.
+- RAM.
+- Disco.
+
+### Milestone 4 — Dashboard e grafici
+
+Integrare:
+
+- Overview.
+- Live Monitor.
+- Trends.
+- Gestione segnali.
+- Aggiornamento live.
+- Navigazione completa.
+
+### Milestone 5 — Stabilità e distribuzione
+
+Implementare:
+
+- Riconnessione.
+- Gestione errori.
+- Persistenza.
+- Logging.
+- Test di durata.
+- Build GitHub Actions.
+- APK scaricabile.
+
+---
+
+## 11. Test obbligatori
+
+Verificare:
+
+- Compilazione APK Android 10.
+- Compatibilità ARM64.
+- Caricamento delle librerie native.
+- Gestione certificati OPC UA.
+- Conversione tipi OPC UA.
+- Stato delle subscription.
+- Gestione timestamp.
+- Parsing dei dati FreeBSD.
+- Riconnessione Ethernet.
+- Riconnessione OPC UA.
+- Riconnessione SSH.
+- Assenza di operazioni di scrittura.
+- Gestione dei dati obsoleti.
+- Stabilità della UI.
+
+Eseguire dove possibile test automatici con server OPC UA e SSH di prova.
+
+Non dichiarare verificata la compatibilità con il CX2062 reale senza aver eseguito test sul dispositivo.
+
+---
+
+## 12. Vincoli inderogabili
+
+- Non installare software sul CX2062.
+- Non modificare il progetto PLC.
+- Non introdurre un bridge esterno.
+- Non utilizzare un server cloud.
+- Non richiedere Internet durante l'utilizzo.
+- Non scrivere variabili.
+- Non eseguire comandi SSH arbitrari.
+- Non richiedere root Android.
+- Non richiedere licenze di sviluppo a pagamento.
+- Non sostituire il client reale con dati simulati.
+- Non consegnare un semplice mockup anziché un'app compilabile.
+
+Priorità:
+
+1. Sicurezza e sola lettura.
+2. Compilabilità APK.
+3. Connessione Ethernet affidabile.
+4. OPC UA reale.
+5. SSH reale.
+6. Diagnostica corretta.
+7. Grafici e interfaccia.
+8. Ottimizzazione.
+
+---
+
+## 13. Istruzioni operative per Codex
+
+Lavora direttamente nel repository.
+
+Non limitarti a fornire istruzioni teoriche: crea e modifica i file necessari.
+
+Prima di sviluppare, verifica la compatibilità delle librerie selezionate con Android 10 e ARM64.
+
+Se il repository è vuoto, inizializza il progetto Android completo.
+
+Se è già presente codice, analizzalo e preserva le funzionalità compatibili.
+
+Procedi progressivamente, producendo una build verificabile a ogni milestone.
+
+Esegui realmente i test disponibili.
+
+Se non disponi di Android SDK, NDK o toolchain necessari nell'ambiente corrente, configura GitHub Actions e documenta esattamente quali test restano da eseguire.
+
+Non affermare di aver compilato l'APK se la compilazione non è stata eseguita con successo.
+
+Non affermare di aver verificato OPC UA o SSH sul CX2062 se il dispositivo reale non era raggiungibile.
+
+### Output finale richiesto
+
+Al termine fornisci:
+
+1. Stato delle milestone.
+2. File creati o modificati.
+3. Versioni delle dipendenze.
+4. Esito della compilazione.
+5. Esito dei test.
+6. Posizione effettiva dell'APK, se generato.
+7. Istruzioni per installazione Samsung Note9.
+8. Procedura di collegamento CX2062.
+9. Limitazioni residue.
+10. Sviluppi futuri consigliati.
+
+**Obiettivo finale: Space Analyzer Mobile, un'app Android nativa e indipendente per la diagnostica OPC UA e SSH dei sistemi Beckhoff, sicura, in sola lettura e utilizzabile completamente offline.**
