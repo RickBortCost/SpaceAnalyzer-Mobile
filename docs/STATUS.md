@@ -10,12 +10,15 @@
 - Lint: 0 errori. Controlli strutturali Python: 6 passati (sola lettura del protocollo, nessun «accetta tutto», permessi attesi).
 - APK debug `app/build/outputs/apk/debug/app-debug.apk` (versionCode 3, minSdk 29, targetSdk 36, arm64-v8a + x86_64) e release minificato non firmato (≈3,3 MB).
 
+## Modalità prova
+Dalla pagina Collega l'app può generare segnali simulati sul telefono (nessun PC). Prova interfaccia, grafico, registrazione ed esportazione, ma **non** il collegamento reale (TLS, USB, gRPC), che è coperto solo dai test automatici.
+
 ## NON verificato
 - Esecuzione su telefono fisico o emulatore (nessuno disponibile nell'ambiente di sviluppo): UI, servizio in primo piano, Keystore, file picker, comportamento del tethering USB sui modelli reali.
 - Il **release minificato (R8)** compila ma non è mai stato eseguito: provarlo prima di distribuirlo. È presente una regola keep per le classi del protocollo.
 - Il **lato Windows**: il server in Space non esiste ancora. Il protocollo è stato validato solo contro server di test.
 - Prestazioni con carichi elevati (migliaia di campioni/s), prove di durata, consumo batteria.
-- Il workflow GitHub Actions non è stato eseguito.
+- Il workflow GitHub Actions della 0.2.0 è riuscito sulla PR #1 (incluso l'avvio su emulatore Android 10); i log dei singoli passi non sono stati riletti.
 
 ## Limiti noti
 - Valori solo numerici (`double`); niente stringhe o strutture.

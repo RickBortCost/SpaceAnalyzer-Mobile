@@ -19,7 +19,7 @@ App Android nativa (Kotlin + Compose) che si collega via USB al PC con Space Fie
 3. Nell'app: pagina **Collega** → scegliere il PC trovato (o digitare l'IPv4), inserire il codice → **Salva** → **Verifica PC** → confrontare l'impronta con quella del PC → **Coincide**.
 4. **Connetti**. Pagina **Live** per i segnali, **Registra** per salvare; **Registrazioni** per esportare.
 
-Senza il lato Windows si può provare l'app con `tools/sfa_dev_server.py` (segnali sintetici, solo per test, mai incluso nell'APK).
+Senza il lato Windows e senza installare nulla sul PC si può provare l'app dalla pagina **Collega** → **Modalità prova**: segnali simulati generati sul telefono, segnalati come «DATI SIMULATI» in Live e nell'intestazione delle registrazioni. In alternativa, `tools/sfa_dev_server.py` è un server di prova da PC (richiede Python; mai incluso nell'APK).
 
 ## Build
 Requisiti: JDK 17+ (bytecode 17), Android SDK 36 con Build Tools 36.0.0. Nessun NDK.

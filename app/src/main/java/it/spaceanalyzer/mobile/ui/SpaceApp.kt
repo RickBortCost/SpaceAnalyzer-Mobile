@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.spaceanalyzer.mobile.link.DEMO_NAME
 import it.spaceanalyzer.mobile.link.LatestValue
 import it.spaceanalyzer.mobile.link.LinkState
 import it.spaceanalyzer.mobile.model.LinkProfile
@@ -37,9 +38,16 @@ fun SpaceApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableIntStateOf(0) }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.connect() }
+    var demoPending by remember { mutableStateOf(false) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (demoPending) vm.connectDemo() else vm.connect(); demoPending = false
+    }
+    val needsPermission = Build.VERSION.SDK_INT >= 33
     val connect: () -> Unit = {
-        if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) else vm.connect()
+        if (needsPermission) { demoPending = false; notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) } else vm.connect()
+    }
+    val demo: () -> Unit = {
+        if (needsPermission) { demoPending = true; notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) } else vm.connectDemo()
     }
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
         Scaffold(bottomBar = {
@@ -56,7 +64,7 @@ fun SpaceApp(vm: MainViewModel = viewModel()) {
                 Text("Sola ricezione dal PC • ${stateText(state)}", style = MaterialTheme.typography.labelMedium)
                 message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 when (page) {
-                    0 -> ConnectPage(vm, connect)
+                    0 -> ConnectPage(vm, connect, demo)
                     1 -> LivePage(vm)
                     2 -> RecordingsPage(vm)
                     3 -> NetworkPage(vm)
@@ -75,7 +83,7 @@ private fun stateText(s: LinkState) = when (s) {
 }
 
 @Composable
-private fun ConnectPage(vm: MainViewModel, connect: () -> Unit) {
+private fun ConnectPage(vm: MainViewModel, connect: () -> Unit, demo: () -> Unit) {
     val saved by vm.profile.collectAsStateWithLifecycle()
     val savedCode by vm.accessCode.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -127,7 +135,10 @@ private fun ConnectPage(vm: MainViewModel, connect: () -> Unit) {
         }
     }
     if (active) Button(onClick = vm::disconnect) { Text("Disconnetti") }
-    else Button(enabled = saved.pinnedFingerprint.isNotBlank() && !dirty, onClick = connect) { Text("Connetti") }
+    else {
+        Button(enabled = saved.pinnedFingerprint.isNotBlank() && !dirty, onClick = connect) { Text("Connetti") }
+        OutlinedButton(onClick = demo) { Text("Modalità prova (dati simulati, senza PC)") }
+    }
     if (dirty) Text("Salvare le modifiche prima di connettersi.")
 }
 
@@ -157,6 +168,9 @@ private fun LivePage(vm: MainViewModel) {
         Text("Nessun dato. Collegarsi al PC dalla pagina «Collega».")
         return
     }
+    if ((state as? LinkState.Streaming)?.serverName == DEMO_NAME)
+        Text("DATI SIMULATI — modalità prova, nessun PC collegato", color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.titleSmall)
     if (!streaming) Text("Collegamento non attivo: i valori mostrati sono gli ultimi ricevuti.", color = MaterialTheme.colorScheme.error)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (recording.file == null) Button(enabled = streaming, onClick = vm::startRecording) { Text("Registra") }
