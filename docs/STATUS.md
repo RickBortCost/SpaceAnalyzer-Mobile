@@ -1,32 +1,32 @@
-# Stato consegna — 25 ottobre 2026
+# Stato — 0.2.0 (28 ottobre 2026)
 
-| Milestone | Stato effettivo |
-|---|---|
-| 1 Android + Ethernet | APK Debug compilato e firmato; test automatici passati; prova Note9/Ethernet da eseguire |
-| 2 OPC UA reale | Non implementata; compilazione open62541/JNI ARM64 da eseguire |
-| 3 SSH reale | Non implementata |
-| 4 Dashboard e grafici | Solo Overview di rete |
-| 5 Stabilità e distribuzione | Wrapper ufficiale e CI predisposti; build locale verificata, nessun workflow remoto eseguito |
+## Verificato sul computer di sviluppo (Linux, JDK 21, Gradle 8.13, SDK 36)
+- `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease`: **BUILD SUCCESSFUL**.
+- **24 test JUnit passati** (più 1 test di interoperabilità, saltato nell'esecuzione standard perché richiede il server Python; eseguito separatamente, vedi sotto), tra cui:
+  - round trip reale **TLS + gRPC** tra il client di produzione e un server di test (abbinamento, hello, segnali, stream, ripresa, codice errato, impronta errata);
+  - sessione: riconnessione con ripresa dall'ultimo `seq`, conteggio interruzioni, stop senza retry su errore fatale, registrazione che attraversa una riconnessione;
+  - formato SFAR (round trip, file troncato, file estraneo, CSV con neutralizzazione di formule e separatori), beacon, decimazione grafico, buffer circolare.
+- **Interoperabilità** con un server indipendente (Python/grpcio, `tools/sfa_dev_server.py`): abbinamento, autenticazione, stream, ripresa senza gap e rifiuto del codice errato — passata. Nel CI è un passo obbligatorio.
+- Lint: 0 errori. Controlli strutturali Python: 6 passati (sola lettura del protocollo, nessun «accetta tutto», permessi attesi).
+- APK debug `app/build/outputs/apk/debug/app-debug.apk` (versionCode 3, minSdk 29, targetSdk 36, arm64-v8a + x86_64) e release minificato non firmato (≈3,3 MB).
 
-## Build riuscita
-Comando: `./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug`.
-Temurin JDK 17.0.21+9, Gradle 8.13, AGP 8.13.2, Kotlin 2.2.21, Android SDK 36, Build Tools 36.0.0. Versioni altre dipendenze nel README.
-APK: `/workspace/SpaceAnalyzer-Mobile/app/build/outputs/apk/debug/app-debug.apk`.
-Firma v2 verificata; minSdk 29, targetSdk 36, ABI arm64-v8a. Le librerie native AndroidX/DataStore sono ELF AArch64. Nessuna libreria open62541.
+## NON verificato
+- Esecuzione su telefono fisico o emulatore (nessuno disponibile nell'ambiente di sviluppo): UI, servizio in primo piano, Keystore, file picker, comportamento del tethering USB sui modelli reali.
+- Il **release minificato (R8)** compila ma non è mai stato eseguito: provarlo prima di distribuirlo. È presente una regola keep per le classi del protocollo.
+- Il **lato Windows**: il server in Space non esiste ancora. Il protocollo è stato validato solo contro server di test.
+- Prestazioni con carichi elevati (migliaia di campioni/s), prove di durata, consumo batteria.
+- Il workflow GitHub Actions non è stato eseguito.
 
-6 test JUnit, 5 controlli strutturali passati. Lint senza errori, 4 warning dettagliati in `lint-results-debug.txt`. Il lint ha rilevato una chiamata API 30 non valida su Android 10, corretta prima della build finale. Avvisi compilatore su allNetworks deprecato; ancora disponibile sul target. NDK assente: librerie precompilate AndroidX impacchettate senza stripping; non impedisce la firma o installabilità del pacchetto.
+## Limiti noti
+- Valori solo numerici (`double`); niente stringhe o strutture.
+- Registrazioni in formato SFAR provvisorio; lettura dei file nativi di Space non implementata (formato non fornito).
+- Il tethering USB va attivato a mano; se il cavo si scollega l'app si riconnette da sola, ma il tethering va riattivato dall'utente.
+- Il servizio in primo piano di tipo `dataSync` è soggetto ai limiti di durata di Android 15+ (circa 6 h su 24 h); per acquisizioni più lunghe serve un'altra strategia.
+- Nessun controllo del PC dal telefono (per scelta).
+- Una sola connessione/profilo alla volta.
 
-## Problema ambiente risolto
-Il proxy non era raggiungibile dai comandi senza accesso di rete. Usando i permessi di rete dell'ambiente, download Gradle/SDK/JDK riusciti. Java 21 iniziale era privo di javac: installato JDK 17 completo in work/. Cache Android e Gradle spostate in cartelle scrivibili. Wrapper ufficiale generato, distribuzione Gradle e JDK verificati con SHA-256. Nessuna credenziale salvata nel repository.
-
-## Limiti residui
-- Nessuna prova su Samsung Note9, adattatore USB, CX2062 o emulatori.
-- Nessun OPC UA, subscription, certificato, SSH, diagnostica FreeBSD, monitor o grafici.
-- Un profilo e tema di sistema; nessuna credenziale raccolta.
-- Una richiesta TCP cancellata termina entro il timeout; non è acquisizione continua.
-- Presenza Ethernet non garantisce raggiungibilità IP.
-- Build non equivale a collaudo runtime o approvazione per manutenzione industriale.
-- La cartella output della chat sotto /codex non esiste e non è creabile in questo executor. L'APK è disponibile nel percorso build del repository sopra indicato, non è stato pubblicato online.
-
-## Prossimi passi
-Installare l'APK sul Note9 ed eseguire il piano `VALIDATION.md`. Poi compilare open62541 cifrata per Android ARM64 e validare una variabile TF6100 reale. Proseguire con SSH a whitelist, monitor/trend, credenziali Keystore e prove di durata.
+## Prossimi passi consigliati
+1. Server SFA Link in Space (Windows) secondo `docs/PROTOCOL.md`.
+2. Collaudo su telefono (piano in `docs/VALIDATION.md`), compreso il release R8.
+3. Lettura dei file nativi Space e/o convertitore SFAR ↔ Space.
+4. Prove di durata e di carico; valutare un'estensione dei tipi (stringhe, booleani nativi).

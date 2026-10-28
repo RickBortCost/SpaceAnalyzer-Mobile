@@ -30,7 +30,7 @@ import sys
 import xml.etree.ElementTree as ET
 root = ET.parse(sys.argv[1]).getroot()
 text = ' '.join(n.attrib.get('text', '') for n in root.iter())
-assert 'Space Analyzer Mobile' in text, text
-assert 'SOLA LETTURA' in text, text
+assert 'Space Fieldbus Analyzer' in text, text
+assert 'Sola ricezione' in text, text
 print('Android 10: APK installed and main screen rendered successfully.')
 PY

@@ -1,23 +1,21 @@
-# Piano di verifica riproducibile
+# Piano di verifica
 
-## Automatico
-- `python3 -m unittest discover -s tests -v`: controlli strutturali della M1.
-- `./gradlew testDebugUnitTest lintDebug assembleDebug`: validazione input, URI, limiti e subnet; lint e compilazione. Eseguito con successo: 6 test, lint 0 errori e APK generato.
-- Verificare APK con `apkanalyzer manifest min-sdk` (29), installare su Android 10. M1 include due librerie native precompilate AndroidX/DataStore: ELF AArch64 verificati. Nessun test di caricamento su dispositivo e nessuna compilazione open62541/JNI.
+## Automatico (eseguito, vedere STATUS.md)
+- `python3 -m unittest discover -s tests`
+- `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease`
+- Interoperabilità: `tools/sfa_dev_server.py` + `InteropTest` (passo del CI).
+- `scripts/test-android10-install.sh` (CI, emulatore API 29): installa l'APK distribuito, lo avvia e controlla la schermata principale. Non eseguito qui.
 
-## Banco Note9 / CX2062 (tutti da eseguire)
-1. Avvio senza rete: nessun crash, nessuna misura simulata, TwinCAT Unknown.
-2. Ethernet senza DHCP: interfaccia presente, eventuale assenza IPv4 chiaramente visibile.
-3. Ethernet con IPv4: confrontare IP, subnet, gateway, DNS con impostazioni Android.
-4. Tenere Wi-Fi/cellulare attivi: accertare con cattura sulla rete di prova che TCP usi Ethernet selezionata. Ripetere con due reti Ethernet, se disponibili.
-5. Porta aperta, rifiutata e filtrata: risultato puntuale corretto, UI reattiva, termine entro timeout. Un servizio TCP generico basta a provare M1.
-6. Scollegare cavo durante il test, ricollegare, ruotare lo schermo, mandare in background: nessun risultato vecchio presentato come connessione attiva, nessun crash o accumulo callback.
-7. Salvare e riaprire profilo; invalidare IP, porte e timeout; verificare blocco input non valido.
-8. Tema chiaro/scuro, font grandi, verticale/orizzontale: tutti i controlli raggiungibili.
-9. Controllare assenza di payload applicativo e assenza modifiche IPC; nessuna autenticazione in M1.
-
-## Protocolli futuri
-Non applicabile alla M1: compilazione/caricamento JNI ARM64; certificati trusted/unknown/expired/hostname mismatch; conversioni tutti i tipi e UInt64; browse continuation; callback/timestamp/qualità/sequence/revised intervals; perdita sessione e backoff; rifiuto host key SSH; parser su fixture FreeBSD reali; durata e memoria limitata; revoca credenziali read-only; test delle operazioni vietate. Nessuna di queste prove è stata eseguita.
-
-## Gate installazione CI dalla 0.1.1
-`scripts/test-android10-install.sh` installa il vero APK della distribuzione su API 29, controlla `Success`, avvia MainActivity e verifica il testo della schermata. L'emulatore è x86_64; lo stesso APK contiene anche arm64-v8a. I risultati vanno letti nella specifica esecuzione GitHub Actions, non dedotti dal solo passaggio assembleDebug.
+## Collaudo su telefono (da eseguire)
+Preparazione: `tools/sfa_dev_server.py` sul PC (o il server di Space), tethering USB attivo.
+1. Installazione e avvio su Android 10 e su un Android recente (13+); richiesta permesso notifiche.
+2. Beacon: il PC compare in «PC trovati» entro ~5 s. Digitando l'IPv4 a mano funziona ugualmente.
+3. Abbinamento: l'impronta mostrata coincide con quella del server; con impronta diversa o certificato rigenerato il collegamento è rifiutato con messaggio chiaro. Cambiando indirizzo l'impronta confermata viene azzerata.
+4. Codice errato → errore fisso, nessun tentativo ripetuto. Codice corretto → segnali e valori.
+5. Live: valori che si aggiornano, grafico fluido con 1–4 segnali, finestre 10 s–5 min, pausa/ripresa. Spegnere il server: dopo ≤ ~15 s i valori diventano «obsoleti» e lo stato passa a «Riconnessione».
+6. Scollegare e ricollegare il cavo durante la ricezione: riconnessione automatica (previa riattivazione del tethering) e ripresa senza gap entro il buffer del server; con buffer superato, l'interruzione viene contata.
+7. Registrazione: avviare, bloccare lo schermo per qualche minuto, riaprire: la registrazione prosegue (notifica visibile). Stop; esportare SFAR e CSV; aprire il CSV in un foglio di calcolo (nessuna formula eseguita).
+8. Terminare l'app a forza durante una registrazione: il file si legge fino all'ultimo secondo circa.
+9. Rotazione, tema chiaro/scuro, font grandi, app in background e ritorno.
+10. APK release minificato: ripetere 3–7 (verifica che R8 non rompa protobuf/gRPC).
+11. Prova di durata (≥ 1 h a regime, stesso carico previsto) con controllo di memoria e batteria.
