@@ -1,70 +1,45 @@
-# Space Analyzer Mobile — 0.1.1 / M1
+# Space Fieldbus Analyzer Mobile — 0.2.0
 
-App Android nativa Kotlin + Compose per il primo passo della diagnostica Beckhoff CX2062.
-**Stato: APK Debug Milestone 1 compilato il 25 ottobre 2026; 6 test JUnit passati e lint senza errori. App non ancora validata sul telefono.**
-Non è ancora il prodotto OPC UA/SSH completo richiesto. Nessun dato simulato.
+App Android nativa (Kotlin + Compose) che si collega via USB al PC con Space Fieldbus Analyzer, **visualizza i segnali in tempo reale e li registra sul telefono**. L'acquisizione (OPC UA, MQTT, bus di campo) resta sul PC; il telefono è un client in sola ricezione.
 
-## Funzioni implementate nel sorgente
-- Overview e Network Diagnostics: reti Ethernet, Wi-Fi, cellulare, VPN; IP, prefisso, subnet IPv4, gateway e DNS.
-- Selezione della rete Ethernet e test TCP indipendenti verso endpoint OPC UA e porta SSH.
-- Socket associati alla rete selezionata, timeout limitato, esecuzione su Dispatchers.IO, chiusura con `use`.
-- Nessun pacchetto applicativo OPC UA/SSH, comando shell, scrittura PLC o cambio configurazione remoto.
-- Un profilo persistente DataStore; validazione indirizzi/porte; tema di sistema chiaro/scuro, layout scorrevole in entrambi gli orientamenti.
-- Risultati TCP marcati con ora della verifica; invalidazione cambiando rete, profilo o andando in background.
-- Callback di rete rimosse quando la UI non è attiva. Nessun servizio di background.
+**Stato:** prima release. Client, protocollo, registrazione e UI sono compilati e coperti da test automatici sul computer di sviluppo. **Non è ancora stata provata su un telefono fisico né con il lato Windows di Space** (che deve implementare il server descritto in `docs/PROTOCOL.md`). Vedere `docs/STATUS.md`.
 
-## Versioni fissate (build eseguita con successo)
-| Componente | Versione |
-|---|---|
-| JDK build locale / CI / bytecode | Temurin 17.0.21+9 / 17 / 17 |
-| Android Build Tools | 36.0.0 |
-| Gradle | 8.13 |
-| Android Gradle Plugin | 8.13.2 |
-| Kotlin / plugin Compose | 2.2.21 |
-| Compose BOM | 2025.11.01 |
-| Activity Compose | 1.12.0 |
-| Lifecycle | 2.9.4 |
-| DataStore Preferences | 1.1.7 |
-| Coroutines | 1.10.2 |
-| JUnit | 4.13.2 |
-| minSdk / compileSdk / targetSdk | 29 / 36 / 36 |
-| NDK predisposto | 27.2.12479018 |
-| CMake predisposto in CI | 3.22.1 |
+## Funzioni
+- **Collegamento** al PC su TCP: gRPC (HTTP/2 + Protobuf) con TLS e certificato fissato dall'utente (nessuna CA, nessun «accetta tutto»), codice di accesso nel Keystore Android, ricerca automatica dei PC tramite beacon UDP.
+- **Live**: valori, qualità, indicazione di dato obsoleto (> 5 s), grafico multi-segnale con finestra 10 s–5 min, pausa, decimazione min/max per pixel.
+- **Registrazione** locale in formato SFAR (append-only, tollerante a spegnimenti improvvisi, flush ogni secondo), esportazione dell'originale o in CSV tramite il selettore file di Android (nessun permesso di archiviazione).
+- **Riconnessione** automatica con backoff e ripresa dall'ultimo numero di sequenza; le interruzioni non recuperabili sono contate e mostrate.
+- **Servizio in primo piano** (notifica) per continuare ricezione e registrazione a schermo spento.
+- **Rete**: interfacce del telefono, utile per verificare il tethering USB.
+- Sola lettura: il protocollo non contiene alcuna operazione di scrittura o comando verso il PC.
 
-Il lint ha verificato le API rispetto a minSdk 29: `clearCapabilities()` (API 30) è stata sostituita con rimozione individuale delle capability predefinite. Dipendenze risolte e compilazione Kotlin riuscita. L'APK contiene soltanto librerie ARM64 AndroidX/DataStore, con intestazioni ELF AArch64 verificate; non contiene open62541 e non prova una compilazione JNI propria. NDK e CMake non sono stati necessari alla M1 e restano da validare per M2.
+## Uso
+1. Collegare telefono e PC con il cavo USB e attivare **Tethering USB** (Impostazioni → Connessioni → Hotspot e tethering). Android non permette all'app di attivarlo.
+2. In Space avviare il servizio di collegamento mobile: mostra codice di accesso e impronta del certificato.
+3. Nell'app: pagina **Collega** → scegliere il PC trovato (o digitare l'IPv4), inserire il codice → **Salva** → **Verifica PC** → confrontare l'impronta con quella del PC → **Coincide**.
+4. **Connetti**. Pagina **Live** per i segnali, **Registra** per salvare; **Registrazioni** per esportare.
 
-## Build su Windows
-1. Installare Android Studio compatibile con AGP 8.13 e JDK 17. Impostare JDK Gradle a 17.
-2. SDK Manager: Android SDK Platform 36 e Build Tools 36.0.0; per M2 anche NDK 27.2.12479018 e CMake 3.22.1.
-3. Aprire questa cartella in Android Studio, che crea `local.properties` con `sdk.dir`. Non versionare quel file.
-4. Il wrapper ufficiale completo è incluso, con checksum SHA-256 della distribuzione Gradle. Gli script `scripts/bootstrap-gradle.*` sono disponibili solo per rigenerarlo, non servono per la build normale.
-5. Eseguire `gradlew.bat testDebugUnitTest lintDebug assembleDebug`.
-6. Output: `app/build/outputs/apk/debug/app-debug.apk`.
+Senza il lato Windows si può provare l'app con `tools/sfa_dev_server.py` (segnali sintetici, solo per test, mai incluso nell'APK).
 
-Linux: JDK 17, SDK configurato tramite `ANDROID_HOME` o `local.properties`; `./gradlew assembleDebug`.
-La prima build richiede Internet per toolchain e dipendenze. L'app non lo richiede durante l'utilizzo.
+## Build
+Requisiti: JDK 17+ (bytecode 17), Android SDK 36 con Build Tools 36.0.0. Nessun NDK.
 
-## GitHub Actions
-Il workflow `.github/workflows/android.yml` installa SDK/NDK/CMake, usa il wrapper incluso, esegue test di struttura, unit test, lint e build M1, poi pubblica l'APK come artifact. Il workflow remoto non è stato eseguito; i medesimi task Gradle sono stati eseguiti localmente con successo. Gli artifact APK vengono pubblicati dal workflow al termine di una build remota riuscita.
-**La pipeline non compila ancora open62541**: quel passo deve essere aggiunto e verificato nella M2, insieme a backend crittografico e JNI. Installare NDK non costituisce una verifica ARM64.
+```
+./gradlew testDebugUnitTest lintDebug assembleDebug   # APK: app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease                              # APK minificato (R8), non firmato senza chiave
+python3 -m unittest discover -s tests                  # controlli strutturali
+```
+Release firmata: impostare fuori dal repository `SAM_KEYSTORE_PATH`, `SAM_STORE_PASSWORD`, `SAM_KEY_ALIAS`, `SAM_KEY_PASSWORD`. Non versionare chiavi.
 
-## Release privata
-Impostare fuori dal repository `SAM_KEYSTORE_PATH`, `SAM_STORE_PASSWORD`, `SAM_KEY_ALIAS`, `SAM_KEY_PASSWORD`, quindi eseguire `gradlew.bat assembleRelease`. Senza queste variabili la release resta non firmata. Non condividere chiavi, password o file keystore. La debug key generata dalla toolchain serve soltanto ai test.
+Test di interoperabilità con un server indipendente (Python):
+```
+pip install grpcio grpcio-tools
+python3 tools/sfa_dev_server.py --code 123456 --port 47801
+SFA_INTEROP_PORT=47801 SFA_INTEROP_CODE=123456 ./gradlew testDebugUnitTest --tests '*InteropTest'
+```
 
-## Installazione Note9 e collegamento CX2062
-1. Dopo una build riuscita scaricare l'artifact `SpaceAnalyzerMobile-0.1.1-android10-debug` da Actions, estrarre l'APK e trasferirlo sul Note9.
-2. Nelle impostazioni Samsung autorizzare l'installazione da sorgenti sconosciute per l'app usata per aprire il file; installare e aprire Space Analyzer Mobile. Nessun account Play Developer richiesto.
-3. Collegare USB-C/Ethernet e cavo RJ45 al CX2062; verificare la comparsa di Ethernet nella pagina Rete.
-4. Se l'IPC è **già** 192.168.50.20/24, impostare il telefono a 192.168.50.10/24 dalle impostazioni Ethernet Samsung, ove presenti. Non usare un IP già assegnato. I campi dell'app non applicano la configurazione Android.
-5. Se Samsung non permette IP statico, usare una rete di prova separata con DHCP appropriato. Non modificare l'IPC automaticamente e non richiedere root/ADB.
-6. Salvare IP/endpoint/porte corrispondenti al dispositivo e selezionare Ethernet; avviare i test TCP 4840 e 22. Un esito positivo non autentica né valida TF6100/SSH.
-7. Nessuna connessione OPC UA/SSH completa è disponibile in M1. Seguire `docs/VALIDATION.md` prima di usarla per manutenzione.
+## Versioni
+JDK build 17+ / bytecode 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 · Compose BOM 2025.11.01 · gRPC 1.85.1 (okhttp, lite) · protobuf-javalite/protoc 4.28.3 · plugin protobuf 0.9.5 · DataStore 1.1.7 · Coroutines 1.10.2 · minSdk 29 · targetSdk/compileSdk 36 · ABI arm64-v8a, x86_64.
 
-## Stato e passi successivi
-Consultare `docs/STATUS.md`, `docs/VALIDATION.md` e `docs/ARCHITECTURE.md`. Il requisito originale è in `docs/REQUEST.txt`.
-
-## Risultati build locale
-`./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug`: BUILD SUCCESSFUL. Sei test JUnit e cinque controlli strutturali passati. Lint: zero errori, quattro warning (versione più recente Coroutines disponibile, ABI ChromeOS assente, regole backup Android 12, icona applicazione assente). Firma APK v2 verificata. Consultare `docs/apk-verification.txt`, `docs/build-attempt.txt`, `docs/junit-results.xml` e `docs/lint-results-debug.txt`.
-
-## Verifica installazione Android 10 — 0.1.1
-Il pacchetto include arm64-v8a (Note9) e x86_64 (emulatore). La CI deve verificare la firma per API 29, installare lo stesso APK distribuito su un emulatore Android 10 e verificare che la schermata principale sia visibile prima di pubblicarlo. Log di installazione, screenshot e SHA-256 sono nell’artifact validation-reports, cartella android10-install. Questo test non sostituisce il collaudo sul Note9 Samsung né diagnostica automaticamente il messaggio generico «App non installata».
+## Documentazione
+`docs/PROTOCOL.md` (specifica per il lato PC) · `docs/STATUS.md` · `docs/VALIDATION.md` · `docs/ARCHITECTURE.md`. Il progetto precedente (diagnostica Beckhoff con OPC UA/SSH) è documentato in `docs/legacy-beckhoff-request.txt` e non è parte di questa release.

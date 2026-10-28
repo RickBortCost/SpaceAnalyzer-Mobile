@@ -1,1 +1,2 @@
-# No JNI in milestone 1. Add explicit bridge keep rules with milestone 2.
+# Protobuf-lite messages and gRPC stubs are generated and accessed by name/reflection.
+-keep class it.spaceanalyzer.link.v1.** { *; }

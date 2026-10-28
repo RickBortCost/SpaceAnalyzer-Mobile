@@ -1,0 +1,71 @@
+// SFA Link v1: Windows (server) -> Android (client). Read-only by design:
+// the service has no RPC able to modify the PC, the signals or the acquisition.
+syntax = "proto3";
+
+package it.spaceanalyzer.link.v1;
+
+option java_package = "it.spaceanalyzer.link.v1";
+option java_multiple_files = true;
+
+service SfaLink {
+  // Version handshake and server identity. The access code travels in the
+  // "x-sfa-access-code" metadata header of every call, never in a message.
+  rpc Hello(HelloRequest) returns (HelloReply);
+  rpc ListSignals(ListSignalsRequest) returns (ListSignalsReply);
+  // Server-streaming. Batches carry a monotonically increasing sequence number.
+  // After a disconnection the client resumes with resume_after_seq; if the
+  // server no longer holds those batches it must set gap=true on the first batch.
+  rpc Subscribe(SubscribeRequest) returns (stream SampleBatch);
+}
+
+message HelloRequest {
+  uint32 protocol_version = 1;
+  string client_name = 2;
+}
+
+message HelloReply {
+  uint32 protocol_version = 1;
+  string server_name = 2;
+  string acquisition_name = 3;
+}
+
+message ListSignalsRequest {}
+
+enum SignalType {
+  SIGNAL_TYPE_DOUBLE = 0;
+  SIGNAL_TYPE_INTEGER = 1;
+  SIGNAL_TYPE_BOOLEAN = 2;
+}
+
+message Signal {
+  uint32 id = 1;
+  string name = 2;
+  string unit = 3;
+  SignalType type = 4;
+}
+
+message ListSignalsReply {
+  repeated Signal signals = 1;
+}
+
+message SubscribeRequest {
+  // Empty = all signals.
+  repeated uint32 signal_ids = 1;
+  // 0 = live only, no catch-up.
+  uint64 resume_after_seq = 2;
+}
+
+message Sample {
+  uint32 signal_id = 1;
+  // Microseconds since the Unix epoch, assigned by the PC.
+  int64 timestamp_us = 2;
+  double value = 3;
+  // 0 = good. Any other value is a bad/uncertain quality code from the server.
+  uint32 quality = 4;
+}
+
+message SampleBatch {
+  uint64 seq = 1;
+  bool gap = 2;
+  repeated Sample samples = 3;
+}

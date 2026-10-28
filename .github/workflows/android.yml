@@ -1,4 +1,4 @@
-name: Android milestone 1
+name: Android
 on:
   push:
   pull_request:
@@ -21,11 +21,24 @@ jobs:
           packages: 'platform-tools'
           log-accepted-android-sdk-licenses: false
       - name: Install pinned Android toolchain
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Validate source constraints
         run: python3 -m unittest discover -s tests -v
       - name: Unit tests, lint and debug APK
         run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+      - name: Interoperability with the independent Python server
+        run: |
+          python3 -m venv /tmp/venv && /tmp/venv/bin/pip install grpcio grpcio-tools
+          /tmp/venv/bin/python tools/sfa_dev_server.py --code 123456 --port 47801 --cert-dir /tmp/sfa-dev > /tmp/devserver.log 2>&1 &
+          for i in $(seq 1 30); do grep -q "Certificate SHA-256" /tmp/devserver.log && break; sleep 1; done
+          SFA_INTEROP_PORT=47801 SFA_INTEROP_CODE=123456 ./gradlew --no-daemon testDebugUnitTest --tests '*InteropTest' --rerun-tasks
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r = ET.parse('app/build/test-results/testDebugUnitTest/TEST-it.spaceanalyzer.mobile.link.InteropTest.xml').getroot()
+          assert r.get('tests') == '1' and r.get('skipped') == '0' and r.get('failures') == '0' and r.get('errors') == '0', r.attrib
+          PY
+      - name: Release build (R8)
+        run: ./gradlew --no-daemon assembleRelease
       - name: Verify APK signature for Android 10
         run: '"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --min-sdk-version 29 --max-sdk-version 29 app/build/outputs/apk/debug/app-debug.apk'
       - name: Enable emulator acceleration
@@ -43,7 +56,7 @@ jobs:
           script: bash scripts/test-android10-install.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: SpaceAnalyzerMobile-0.1.1-android10-debug
+          name: SpaceFieldbusAnalyzer-0.2.0-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4

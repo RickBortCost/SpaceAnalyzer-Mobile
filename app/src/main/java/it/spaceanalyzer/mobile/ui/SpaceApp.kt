@@ -1,7 +1,10 @@
 package it.spaceanalyzer.mobile.ui
 
-import android.content.Intent
-import android.provider.Settings
+import android.Manifest
+import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,128 +12,247 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import it.spaceanalyzer.mobile.model.Profile
+import it.spaceanalyzer.mobile.link.LatestValue
+import it.spaceanalyzer.mobile.link.LinkState
+import it.spaceanalyzer.mobile.model.LinkProfile
 import it.spaceanalyzer.mobile.viewmodel.MainViewModel
+import it.spaceanalyzer.mobile.viewmodel.Pairing
+import it.spaceanalyzer.mobile.viewmodel.RecordingFile
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.delay
+
+private const val STALE_MS = 5_000L
 
 @Composable
 fun SpaceApp(vm: MainViewModel = viewModel()) {
-    val networks by vm.networks.collectAsStateWithLifecycle()
-    val profile by vm.profile.collectAsStateWithLifecycle()
-    val probe by vm.probe.collectAsStateWithLifecycle()
-    val error by vm.error.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsStateWithLifecycle()
+    val message by vm.message.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableIntStateOf(0) }
-    var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val ethernet = networks.filter { it.ethernet }
-    val selected = ethernet.firstOrNull { it.id == selectedId } ?: ethernet.firstOrNull()
-    LaunchedEffect(selected) { selectedId = selected?.id; vm.invalidate() }
-    val owner = LocalLifecycleOwner.current
-    DisposableEffect(owner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) vm.invalidate() }
-        owner.lifecycle.addObserver(observer)
-        onDispose { owner.lifecycle.removeObserver(observer) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.connect() }
+    val connect: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) else vm.connect()
     }
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
         Scaffold(bottomBar = {
             NavigationBar {
-                listOf("Overview", "Rete", "Impostazioni").forEachIndexed { i, title ->
+                listOf("Collega", "Live", "Registrazioni", "Rete").forEachIndexed { i, title ->
                     NavigationBarItem(selected = page == i, onClick = { page = i },
-                        icon = { Text(listOf("◉", "⇄", "⚙")[i]) }, label = { Text(title) })
+                        icon = { Text(listOf("⇄", "∿", "●", "☰")[i]) }, label = { Text(title, maxLines = 1) })
                 }
             }
         }) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())
                 .padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Space Analyzer Mobile", style = MaterialTheme.typography.headlineSmall)
-                Text("SOLA LETTURA • v0.1 / Milestone 1", style = MaterialTheme.typography.labelMedium)
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Text("Space Fieldbus Analyzer", style = MaterialTheme.typography.headlineSmall)
+                Text("Sola ricezione dal PC • ${stateText(state)}", style = MaterialTheme.typography.labelMedium)
+                message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 when (page) {
-                    0 -> {
-                        InfoCard(profile.name, "IPC: ${profile.host}\nHostname: Unknown")
-                        InfoCard("Connessioni", "Ethernet: ${if (selected == null) "Disconnected" else "Connected — ${selected.name}"}\nOPC UA: non implementato\nSSH: non implementato\nTwinCAT: Unknown")
-                        InfoCard("Diagnostica industriale", "CPU, RAM, disco e uptime: non disponibili. Richiedono il client SSH della Milestone 3.")
-                        Button(onClick = { page = 1 }) { Text("Apri Network Diagnostics") }
-                    }
-                    1 -> {
-                        Text("Network Diagnostics", style = MaterialTheme.typography.titleLarge)
-                        if (networks.isEmpty()) Text("Nessuna rete rilevata. Collegare l’adattatore USB-C/Ethernet.")
-                        networks.forEach { n ->
-                            Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text("${n.transport} • ${n.name}", style = MaterialTheme.typography.titleMedium)
-                                    Text("IP / subnet: ${n.addresses.joinToString("\n").ifEmpty { "non assegnato" }}")
-                                    Text("Gateway: ${n.gateways.joinToString().ifEmpty { "nessuno" }}")
-                                    Text("DNS: ${n.dns.joinToString().ifEmpty { "nessuno" }}")
-                                    if (n.ethernet) TextButton(onClick = { selectedId = n.id }) {
-                                        Text(if (selected?.id == n.id) "Ethernet selezionata" else "Seleziona Ethernet")
-                                    }
-                                }
-                            }
-                        }
-                        Text("Test senza invio di comandi o dati applicativi.")
-                        Button(enabled = selected != null && !probe.running,
-                            onClick = { selected?.let { vm.test(it.id) } }) {
-                            Text(if (probe.running) "Test in corso…" else "Verifica porte TCP")
-                        }
-                        InfoCard("OPC UA • ${profile.endpoint}", probe.opc)
-                        InfoCard("SSH • ${profile.host}:${profile.sshPort}", probe.ssh)
-                        probe.checkedAt?.let { Text("Risultato puntuale: ${DateFormat.getDateTimeInstance().format(Date(it))}. Non è un monitoraggio continuo.") }
-                        InfoCard("IPv4 manuale", "Telefono: ${profile.phoneIp}/${profile.prefix}\nIPC previsto: ${profile.host}\nConfigurare l’IP Ethernet dalle impostazioni Samsung, se disponibili. Questa app salva il riferimento ma non modifica la rete. Se l’opzione manca, usare DHCP su una rete di prova separata; non cambiare automaticamente il CX2062.")
-                        val context = LocalContext.current
-                        OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_SETTINGS)) }) { Text("Apri impostazioni Android") }
-                    }
-                    2 -> ProfileEditor(profile, vm::save)
+                    0 -> ConnectPage(vm, connect)
+                    1 -> LivePage(vm)
+                    2 -> RecordingsPage(vm)
+                    3 -> NetworkPage(vm)
                 }
-                Text("Nessuna misura simulata. Nessuna modifica al PLC o all’IPC.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+private fun stateText(s: LinkState) = when (s) {
+    LinkState.Idle -> "Non collegato"
+    LinkState.Connecting -> "Collegamento…"
+    is LinkState.Streaming -> "Collegato a ${s.serverName}"
+    is LinkState.Reconnecting -> "Riconnessione (${s.attempt}) • ${s.reason}"
+    is LinkState.Failed -> "Errore: ${s.reason}"
+}
+
+@Composable
+private fun ConnectPage(vm: MainViewModel, connect: () -> Unit) {
+    val saved by vm.profile.collectAsStateWithLifecycle()
+    val savedCode by vm.accessCode.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsStateWithLifecycle()
+    val pairing by vm.pairing.collectAsStateWithLifecycle()
+    val found by vm.discovered.collectAsStateWithLifecycle()
+    var name by rememberSaveable(saved.name) { mutableStateOf(saved.name) }
+    var host by rememberSaveable(saved.host) { mutableStateOf(saved.host) }
+    var port by rememberSaveable(saved.port) { mutableStateOf(saved.port) }
+    var code by rememberSaveable(savedCode) { mutableStateOf(savedCode) }
+    val draft = LinkProfile(name.trim(), host.trim(), port.trim(), saved.pinnedFingerprint)
+    val active = state !is LinkState.Idle && state !is LinkState.Failed
+
+    Text("Collegamento al PC", style = MaterialTheme.typography.titleLarge)
+    Text("1. Collegare il telefono al PC con il cavo USB e attivare «Tethering USB» nelle impostazioni Android.\n" +
+        "2. In Space avviare il servizio «Collegamento mobile»: mostra codice di accesso e impronta del certificato.")
+    if (found.isNotEmpty() && !active) {
+        Text("PC trovati sulla rete", style = MaterialTheme.typography.titleMedium)
+        found.values.forEach { pc ->
+            OutlinedButton(onClick = { host = pc.host; port = pc.port.toString(); name = pc.name }) {
+                Text("${pc.name} — ${pc.host}:${pc.port}")
+            }
+        }
+    }
+    Field("Nome", name, enabled = !active) { name = it }
+    Field("Indirizzo IPv4 del PC", host, enabled = !active, keyboard = KeyboardType.Number) { host = it }
+    Field("Porta", port, enabled = !active, keyboard = KeyboardType.Number) { port = it }
+    Field("Codice di accesso", code, enabled = !active, secret = true) { code = it }
+    draft.validationError()?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    val dirty = draft.copy(pinnedFingerprint = "") != saved.copy(pinnedFingerprint = "") || code != savedCode
+    Button(enabled = !active && draft.validationError() == null && dirty, onClick = { vm.save(draft, code) }) { Text("Salva") }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Identità del PC", style = MaterialTheme.typography.titleMedium)
+            if (saved.pinnedFingerprint.isBlank()) Text("Non verificata. Il collegamento è bloccato finché non si conferma l’impronta.")
+            else Text("Impronta confermata:\n${saved.pinnedFingerprint.chunked(48).joinToString("\n")}")
+            when (val p = pairing) {
+                Pairing.Idle -> Unit
+                Pairing.Checking -> Text("Lettura del certificato…")
+                is Pairing.Error -> Text(p.message, color = MaterialTheme.colorScheme.error)
+                is Pairing.Found -> {
+                    Text("Impronta presentata dal PC:\n${p.fingerprint.chunked(48).joinToString("\n")}")
+                    Text("Confrontarla con quella mostrata in Space. Confermare solo se coincide.")
+                    Button(onClick = { vm.confirmPairing(draft, code) }) { Text("Coincide: considera attendibile") }
+                }
+            }
+            OutlinedButton(enabled = !active && draft.validationError() == null && pairing !is Pairing.Checking,
+                onClick = { vm.verifyPc(draft) }) { Text("Verifica PC") }
+        }
+    }
+    if (active) Button(onClick = vm::disconnect) { Text("Disconnetti") }
+    else Button(enabled = saved.pinnedFingerprint.isNotBlank() && !dirty, onClick = connect) { Text("Connetti") }
+    if (dirty) Text("Salvare le modifiche prima di connettersi.")
+}
+
+@Composable
+private fun LivePage(vm: MainViewModel) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    val signals by vm.signals.collectAsStateWithLifecycle()
+    val latest by vm.latest.collectAsStateWithLifecycle()
+    val stats by vm.stats.collectAsStateWithLifecycle()
+    val recording by vm.recording.collectAsStateWithLifecycle()
+    var selected by rememberSaveable { mutableStateOf(setOf<Int>()) }
+    var windowS by rememberSaveable { mutableIntStateOf(30) }
+    var paused by rememberSaveable { mutableStateOf(false) }
+    var frame by remember { mutableStateOf(listOf<Triple<Int, androidx.compose.ui.graphics.Color, it.spaceanalyzer.mobile.link.Series>>()) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(selected, paused) {
+        while (true) {
+            now = System.currentTimeMillis()
+            if (!paused) frame = selected.sorted().mapIndexedNotNull { i, id ->
+                vm.trend(id)?.let { Triple(id, TrendColors[i % TrendColors.size], it) }
+            }
+            delay(250)
+        }
+    }
+    val streaming = state is LinkState.Streaming
+    if (!streaming && signals.isEmpty()) {
+        Text("Nessun dato. Collegarsi al PC dalla pagina «Collega».")
+        return
+    }
+    if (!streaming) Text("Collegamento non attivo: i valori mostrati sono gli ultimi ricevuti.", color = MaterialTheme.colorScheme.error)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (recording.file == null) Button(enabled = streaming, onClick = vm::startRecording) { Text("Registra") }
+        else Button(onClick = vm::stopRecording) { Text("Stop registrazione") }
+        OutlinedButton(onClick = { paused = !paused }) { Text(if (paused) "Riprendi grafico" else "Pausa grafico") }
+    }
+    recording.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    if (recording.file != null) Text("Registrazione in corso • ${recording.samples} campioni")
+    Text("Batch ${stats.lastSeq} • campioni ${stats.samples} • interruzioni ${stats.gaps}", style = MaterialTheme.typography.bodySmall)
+
+    val shown = frame.filter { it.first in selected }
+    val end = shown.maxOfOrNull { it.third.timesUs.lastOrNull() ?: 0L } ?: 0L
+    if (shown.isNotEmpty()) {
+        TrendChart(shown.map { it.second to it.third }, windowS * 1_000_000L, end, MaterialTheme.colorScheme.outline)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(10, 30, 60, 300).forEach { s ->
+                FilterChip(selected = windowS == s, onClick = { windowS = s }, label = { Text("${s}s") })
+            }
+        }
+    } else Text("Selezionare uno o più segnali per il grafico.")
+
+    signals.forEach { sig ->
+        val v: LatestValue? = latest[sig.id]
+        val stale = v == null || now - v.receivedAtMs > STALE_MS
+        val color = frame.firstOrNull { it.first == sig.id }?.second
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Checkbox(checked = sig.id in selected, onCheckedChange = { selected = if (it) selected + sig.id else selected - sig.id })
+                Column(Modifier.weight(1f)) {
+                    Text(sig.name, style = MaterialTheme.typography.titleSmall)
+                    Text(when {
+                        v == null -> "nessun dato"
+                        v.quality != 0 -> "qualità non buona (${v.quality})"
+                        stale -> "dato obsoleto"
+                        else -> "aggiornato"
+                    }, style = MaterialTheme.typography.bodySmall,
+                        color = if (v == null || stale || v.quality != 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(v?.let { "%.6g %s".format(it.value, sig.unit) } ?: "—", style = MaterialTheme.typography.titleMedium,
+                    color = color ?: MaterialTheme.colorScheme.onSurface)
             }
         }
     }
 }
 
 @Composable
-private fun InfoCard(title: String, body: String) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(body)
+private fun RecordingsPage(vm: MainViewModel) {
+    val list by vm.recordings.collectAsStateWithLifecycle()
+    val active by vm.recording.collectAsStateWithLifecycle()
+    var pending by remember { mutableStateOf<Pair<RecordingFile, Boolean>?>(null) }
+    val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        val p = pending; pending = null
+        if (uri != null && p != null) vm.export(uri, p.first, p.second)
+    }
+    LaunchedEffect(Unit) { vm.refreshRecordings() }
+    Text("Registrazioni sul telefono", style = MaterialTheme.typography.titleLarge)
+    if (list.isEmpty()) Text("Nessuna registrazione. Avviarne una dalla pagina «Live».")
+    list.forEach { r ->
+        val recordingNow = active.file == r.file
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(r.file.name, style = MaterialTheme.typography.titleSmall)
+                Text("${DateFormat.getDateTimeInstance().format(Date(r.modifiedMs))} • ${r.sizeBytes / 1024} KB" +
+                    if (recordingNow) " • in corso" else "", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(enabled = !recordingNow, onClick = { pending = r to false; create.launch(r.file.name) }) { Text("Esporta") }
+                    TextButton(enabled = !recordingNow, onClick = { pending = r to true; create.launch(r.file.nameWithoutExtension + ".csv") }) { Text("CSV") }
+                    TextButton(enabled = !recordingNow, onClick = { vm.delete(r) }) { Text("Elimina") }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun ProfileEditor(saved: Profile, save: (Profile) -> Unit) {
-    var name by rememberSaveable(saved) { mutableStateOf(saved.name) }
-    var host by rememberSaveable(saved) { mutableStateOf(saved.host) }
-    var endpoint by rememberSaveable(saved) { mutableStateOf(saved.endpoint) }
-    var port by rememberSaveable(saved) { mutableStateOf(saved.sshPort) }
-    var phone by rememberSaveable(saved) { mutableStateOf(saved.phoneIp) }
-    var prefix by rememberSaveable(saved) { mutableStateOf(saved.prefix) }
-    var timeout by rememberSaveable(saved) { mutableStateOf(saved.timeoutMs) }
-    Text("Profilo connessione", style = MaterialTheme.typography.titleLarge)
-    Field("Nome IPC", name) { name = it }
-    Field("IPv4 IPC / SSH", host) { host = it }
-    Field("Endpoint OPC UA", endpoint) { endpoint = it }
-    Field("Porta SSH", port) { port = it }
-    Field("IPv4 telefono (solo riferimento)", phone) { phone = it }
-    Field("Prefisso subnet (24 = 255.255.255.0)", prefix) { prefix = it }
-    Field("Timeout TCP (ms)", timeout) { timeout = it }
-    val draft = Profile(name.trim(), host.trim(), endpoint.trim(), port.trim(), phone.trim(), prefix.trim(), timeout.trim())
-    draft.validationError()?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    Button(enabled = draft.validationError() == null && draft != saved, onClick = { save(draft) }) { Text("Salva profilo") }
-    Text("${if (draft == saved) "Profilo salvato." else "Modifiche non salvate."} Un profilo nella Milestone 1. Nessuna credenziale viene raccolta.")
+private fun NetworkPage(vm: MainViewModel) {
+    val networks by vm.networks.collectAsStateWithLifecycle()
+    Text("Reti del telefono", style = MaterialTheme.typography.titleLarge)
+    Text("Con il tethering USB attivo compare un’interfaccia dedicata. Il collegamento al PC usa quella rete.")
+    if (networks.isEmpty()) Text("Nessuna rete rilevata.")
+    networks.forEach { n ->
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("${n.transport} • ${n.name}", style = MaterialTheme.typography.titleMedium)
+                Text("IP / subnet: ${n.addresses.joinToString("\n").ifEmpty { "non assegnato" }}")
+                Text("Gateway: ${n.gateways.joinToString().ifEmpty { "nessuno" }}")
+            }
+        }
+    }
 }
 
 @Composable
-private fun Field(label: String, value: String, change: (String) -> Unit) {
-    OutlinedTextField(value = value, onValueChange = change, label = { Text(label) },
-        singleLine = true, modifier = Modifier.fillMaxWidth())
+private fun Field(label: String, value: String, enabled: Boolean = true, secret: Boolean = false,
+    keyboard: KeyboardType = KeyboardType.Text, change: (String) -> Unit) {
+    OutlinedTextField(value = value, onValueChange = change, label = { Text(label) }, enabled = enabled,
+        singleLine = true, modifier = Modifier.fillMaxWidth(),
+        visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else keyboard))
 }
