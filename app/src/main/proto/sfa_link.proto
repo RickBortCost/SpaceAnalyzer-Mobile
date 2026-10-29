@@ -6,6 +6,7 @@ package it.spaceanalyzer.link.v1;
 
 option java_package = "it.spaceanalyzer.link.v1";
 option java_multiple_files = true;
+option csharp_namespace = "SpaceAnalyzer.App.MobileLink.Proto";
 
 service SfaLink {
   // Version handshake and server identity. The access code travels in the

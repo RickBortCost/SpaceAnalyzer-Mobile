@@ -2,7 +2,7 @@
 
 App Android nativa (Kotlin + Compose) che si collega via USB al PC con Space Fieldbus Analyzer, **visualizza i segnali in tempo reale e li registra sul telefono**. L'acquisizione (OPC UA, MQTT, bus di campo) resta sul PC; il telefono è un client in sola ricezione.
 
-**Stato:** prima release. Client, protocollo, registrazione e UI sono compilati e coperti da test automatici sul computer di sviluppo. **Non è ancora stata provata su un telefono fisico né con il lato Windows di Space** (che deve implementare il server descritto in `docs/PROTOCOL.md`). Vedere `docs/STATUS.md`.
+**Stato:** prima release. Client, protocollo, registrazione e UI sono compilati e coperti da test automatici sul computer di sviluppo. **Non è ancora stata provata su un telefono fisico né con il lato Windows di Space** (il server è nel repository `SpaceFieldbusAnalyzer_Free`, funzione «Collegamento mobile»; specifica in `docs/PROTOCOL.md`). Vedere `docs/STATUS.md`.
 
 ## Funzioni
 - **Collegamento** al PC su TCP: gRPC (HTTP/2 + Protobuf) con TLS e certificato fissato dall'utente (nessuna CA, nessun «accetta tutto»), codice di accesso nel Keystore Android, ricerca automatica dei PC tramite beacon UDP.

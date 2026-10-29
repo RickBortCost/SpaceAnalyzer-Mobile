@@ -31,6 +31,9 @@ Beacon **UDP broadcast** ogni ~2 s sulla porta **47810** verso `255.255.255.255`
 `{"sfa":1,"name":"PC-Laboratorio","port":47800}`.
 È solo un suggerimento per precompilare indirizzo e porta (l'indirizzo è quello sorgente del pacchetto): la fiducia deriva dall'abbinamento. Il client accetta solo sorgenti IPv4 private o link-local.
 
+## Implementazione di riferimento (Space, C#)
+Il server è implementato in Space Fieldbus Analyzer (repository `SpaceFieldbusAnalyzer_Free`, cartella `source/app/SpaceAnalyzer/MobileLink/`, guida `source/GUIDA_COLLEGAMENTO_MOBILE.md`): host Kestrel separato dall'interfaccia web, certificato autofirmato, codice di accesso da 8 cifre con blocco dopo 5 tentativi errati al minuto, annuncio UDP da ogni interfaccia, ripresa con buffer di 6000 batch. Il file `.proto` è lo stesso (con in più `option csharp_namespace`, ignorata da Kotlin). Il client Android reale è stato provato contro questo server su Linux.
+
 ## Schema .NET (indicativo)
 Pacchetti `Grpc.AspNetCore`, `Google.Protobuf`, `Grpc.Tools`; il progetto include `sfa_link.proto` con `GrpcServices="Server"`. Kestrel con `ListenAnyIP(47800, o => { o.Protocols = Http2; o.UseHttps(cert); })`. Un `ServerInterceptor` verifica `x-sfa-access-code`. L'impronta si calcola con `Convert.ToHexString(SHA256.HashData(cert.RawData))`.
 
