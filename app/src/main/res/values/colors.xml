@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirror of SpaceBrand/dark background (ui/Theme.kt) for the launcher icon and system bars. -->
+<resources>
+    <color name="space_background">#101010</color>
+    <color name="space_accent">#006EFF</color>
+</resources>

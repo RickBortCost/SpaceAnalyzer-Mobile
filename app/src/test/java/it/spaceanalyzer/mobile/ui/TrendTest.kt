@@ -24,3 +24,19 @@ class TrendTest {
         assertEquals(0, d.x.size)
     }
 }
+
+class ValueAtTest {
+    private fun series(vararg p: Pair<Long, Double>) = it.spaceanalyzer.mobile.link.Series(p.map { it.first }.toLongArray(), p.map { it.second }.toDoubleArray())
+    @Test fun returnsLastSampleAtOrBeforeTime() {
+        val s = series(10L to 1.0, 20L to 2.0, 30L to 3.0)
+        assertEquals(2.0, valueAt(s, 25)!!, 0.0)
+        assertEquals(3.0, valueAt(s, 30)!!, 0.0)
+        assertEquals(1.0, valueAt(s, 10)!!, 0.0)
+    }
+    @Test fun nullBeforeFirstSampleOrWhenTooOld() {
+        val s = series(100L to 1.0)
+        org.junit.Assert.assertNull(valueAt(s, 50))
+        org.junit.Assert.assertNull(valueAt(s, 100 + 10_000_001L))
+        org.junit.Assert.assertNull(valueAt(series(), 5))
+    }
+}

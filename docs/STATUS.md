@@ -1,4 +1,4 @@
-# Stato — 0.2.0 (28 ottobre 2026)
+# Stato — 0.2.0 (29 ottobre 2026)
 
 ## Verificato sul computer di sviluppo (Linux, JDK 21, Gradle 8.13, SDK 36)
 - `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease`: **BUILD SUCCESSFUL**.
@@ -10,13 +10,16 @@
 - Lint: 0 errori. Controlli strutturali Python: 6 passati (sola lettura del protocollo, nessun «accetta tutto», permessi attesi).
 - APK debug `app/build/outputs/apk/debug/app-debug.apk` (versionCode 3, minSdk 29, targetSdk 36, arm64-v8a + x86_64) e release minificato non firmato (≈3,3 MB).
 
+## Rifiniture
+Zoom/scorrimento/cursore sul grafico, indicatore di registrazione in ogni pagina, avviso e arresto per spazio esaurito (testato con un test automatico), icona, tavolozza colori di Space (`SpaceFieldbusAnalyzer_Free`, `source/static/corporate.css` e `trend.js`). Gesti, colori e icona **non sono stati visti su schermo** (nessun telefono o emulatore disponibile): da controllare sul Note 9 in tema chiaro e scuro.
+
 ## Modalità prova
 Dalla pagina Collega l'app può generare segnali simulati sul telefono (nessun PC). Prova interfaccia, grafico, registrazione ed esportazione, ma **non** il collegamento reale (TLS, USB, gRPC), che è coperto solo dai test automatici.
 
 ## NON verificato
 - Esecuzione su telefono fisico o emulatore (nessuno disponibile nell'ambiente di sviluppo): UI, servizio in primo piano, Keystore, file picker, comportamento del tethering USB sui modelli reali.
 - Il **release minificato (R8)** compila ma non è mai stato eseguito: provarlo prima di distribuirlo. È presente una regola keep per le classi del protocollo.
-- Il **lato Windows**: il server in Space non esiste ancora. Il protocollo è stato validato solo contro server di test.
+- Il **lato Windows**: il server in Space è stato scritto (C#, repository `SpaceFieldbusAnalyzer_Free`) e provato su Linux contro il client Android reale e contro i propri test automatici. Non è stato provato su Windows (firewall, certificato con lo stack TLS di Windows) né con un telefono in tethering USB reale.
 - Prestazioni con carichi elevati (migliaia di campioni/s), prove di durata, consumo batteria.
 - Il workflow GitHub Actions della 0.2.0 è riuscito sulla PR #1 (incluso l'avvio su emulatore Android 10); i log dei singoli passi non sono stati riletti.
 
@@ -29,7 +32,7 @@ Dalla pagina Collega l'app può generare segnali simulati sul telefono (nessun P
 - Una sola connessione/profilo alla volta.
 
 ## Prossimi passi consigliati
-1. Server SFA Link in Space (Windows) secondo `docs/PROTOCOL.md`.
+1. Pubblicare il server SFA Link in Space (modifica già pronta, da rivedere e rilasciare) e provarlo su Windows con il telefono in tethering USB.
 2. Collaudo su telefono (piano in `docs/VALIDATION.md`), compreso il release R8.
 3. Lettura dei file nativi Space e/o convertitore SFAR ↔ Space.
 4. Prove di durata e di carico; valutare un'estensione dei tipi (stringhe, booleani nativi).

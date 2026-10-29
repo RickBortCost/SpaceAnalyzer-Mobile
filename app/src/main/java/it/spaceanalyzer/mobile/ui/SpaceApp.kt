@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -37,6 +37,7 @@ private const val STALE_MS = 5_000L
 fun SpaceApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val rec by vm.recording.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableIntStateOf(0) }
     var demoPending by remember { mutableStateOf(false) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -49,7 +50,7 @@ fun SpaceApp(vm: MainViewModel = viewModel()) {
     val demo: () -> Unit = {
         if (needsPermission) { demoPending = true; notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) } else vm.connectDemo()
     }
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+    SpaceTheme {
         Scaffold(bottomBar = {
             NavigationBar {
                 listOf("Collega", "Live", "Registrazioni", "Rete").forEachIndexed { i, title ->
@@ -62,6 +63,11 @@ fun SpaceApp(vm: MainViewModel = viewModel()) {
                 .padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Space Fieldbus Analyzer", style = MaterialTheme.typography.headlineSmall)
                 Text("Sola ricezione dal PC • ${stateText(state)}", style = MaterialTheme.typography.labelMedium)
+                if (rec.file != null) Text("● REGISTRAZIONE IN CORSO • ${rec.samples} campioni" +
+                    if (rec.lowSpace) " • SPAZIO QUASI ESAURITO" else "",
+                    color = if (rec.lowSpace) LocalSpaceColors.current.warning else LocalSpaceColors.current.recording,
+                    style = MaterialTheme.typography.labelLarge)
+                rec.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 when (page) {
                     0 -> ConnectPage(vm, connect, demo)
@@ -149,8 +155,11 @@ private fun LivePage(vm: MainViewModel) {
     val latest by vm.latest.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val recording by vm.recording.collectAsStateWithLifecycle()
+    val colors = LocalSpaceColors.current
     var selected by rememberSaveable { mutableStateOf(setOf<Int>()) }
-    var windowS by rememberSaveable { mutableIntStateOf(30) }
+    var windowUs by rememberSaveable { mutableLongStateOf(30_000_000L) }
+    var viewEndUs by rememberSaveable { mutableStateOf<Long?>(null) }
+    var cursorUs by rememberSaveable { mutableStateOf<Long?>(null) }
     var paused by rememberSaveable { mutableStateOf(false) }
     var frame by remember { mutableStateOf(listOf<Triple<Int, androidx.compose.ui.graphics.Color, it.spaceanalyzer.mobile.link.Series>>()) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -158,7 +167,7 @@ private fun LivePage(vm: MainViewModel) {
         while (true) {
             now = System.currentTimeMillis()
             if (!paused) frame = selected.sorted().mapIndexedNotNull { i, id ->
-                vm.trend(id)?.let { Triple(id, TrendColors[i % TrendColors.size], it) }
+                vm.trend(id)?.let { Triple(id, colors.series[i % colors.series.size], it) }
             }
             delay(250)
         }
@@ -173,21 +182,49 @@ private fun LivePage(vm: MainViewModel) {
             style = MaterialTheme.typography.titleSmall)
     if (!streaming) Text("Collegamento non attivo: i valori mostrati sono gli ultimi ricevuti.", color = MaterialTheme.colorScheme.error)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (recording.file == null) Button(enabled = streaming, onClick = vm::startRecording) { Text("Registra") }
-        else Button(onClick = vm::stopRecording) { Text("Stop registrazione") }
+        if (recording.file == null) Button(enabled = streaming, onClick = vm::startRecording,
+            colors = ButtonDefaults.buttonColors(containerColor = SpaceBrand.orange, contentColor = Color.Black)) { Text("Registra") }
+        else Button(onClick = vm::stopRecording,
+            colors = ButtonDefaults.buttonColors(containerColor = SpaceBrand.error, contentColor = Color.White)) { Text("Stop registrazione") }
         OutlinedButton(onClick = { paused = !paused }) { Text(if (paused) "Riprendi grafico" else "Pausa grafico") }
     }
-    recording.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    if (recording.file != null) Text("Registrazione in corso • ${recording.samples} campioni")
+    if (recording.lowSpace) Text("Spazio libero sul telefono quasi esaurito: la registrazione si fermerà da sola.",
+        color = LocalSpaceColors.current.warning)
     Text("Batch ${stats.lastSeq} • campioni ${stats.samples} • interruzioni ${stats.gaps}", style = MaterialTheme.typography.bodySmall)
 
     val shown = frame.filter { it.first in selected }
-    val end = shown.maxOfOrNull { it.third.timesUs.lastOrNull() ?: 0L } ?: 0L
+    val latestEnd = shown.maxOfOrNull { it.third.timesUs.lastOrNull() ?: 0L } ?: 0L
+    val end = viewEndUs?.coerceAtMost(latestEnd) ?: latestEnd
     if (shown.isNotEmpty()) {
-        TrendChart(shown.map { it.second to it.third }, windowS * 1_000_000L, end, MaterialTheme.colorScheme.outline)
+        TrendChart(shown.map { it.second to it.third }, windowUs, end, cursorUs, colors.plotText, colors.plotGrid,
+            onPan = { f ->
+                val moved = end - (f * windowUs).toLong()
+                viewEndUs = if (moved >= latestEnd) null else moved
+            },
+            onZoom = { z -> windowUs = (windowUs / z).toLong().coerceIn(MIN_WINDOW_US, MAX_WINDOW_US) },
+            onTap = { f -> cursorUs = end - windowUs + (f * windowUs).toLong() })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(10, 30, 60, 300).forEach { s ->
-                FilterChip(selected = windowS == s, onClick = { windowS = s }, label = { Text("${s}s") })
+                FilterChip(selected = windowUs == s * 1_000_000L, onClick = { windowUs = s * 1_000_000L }, label = { Text("${s}s") })
+            }
+        }
+        Text("Finestra ${"%.1f".format(windowUs / 1e6)} s • pizzica per ingrandire, trascina per scorrere, tocca per il cursore",
+            style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (viewEndUs != null) OutlinedButton(onClick = { viewEndUs = null }) { Text("Torna al live") }
+            if (cursorUs != null) OutlinedButton(onClick = { cursorUs = null }) { Text("Rimuovi cursore") }
+        }
+        cursorUs?.let { t ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Cursore • " + java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault())
+                        .format(Date(t / 1000)), style = MaterialTheme.typography.titleSmall)
+                    shown.forEach { (id, color, series) ->
+                        val sig = signals.firstOrNull { it.id == id }
+                        val v = valueAt(series, t)
+                        Text("${sig?.name ?: id}: ${v?.let { "%.6g %s".format(it, sig?.unit.orEmpty()) } ?: "—"}", color = color)
+                    }
+                }
             }
         }
     } else Text("Selezionare uno o più segnali per il grafico.")

@@ -95,3 +95,27 @@ class LinkSessionTest {
         assertEquals(values.sorted(), values)
     }
 }
+
+class LowSpaceTest {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @After fun tearDown() { scope.cancel() }
+
+    @Test fun warnsThenStopsRecordingKeepingSavedData() = runBlocking {
+        val file = File.createTempFile("lowspace", ".sfar").apply { deleteOnExit() }
+        var free = 1L shl 30
+        val s = LinkSession(scope, { _, _ -> ScriptedClient(mutableListOf(), { _ ->
+            flow { var i = 1L; while (true) { emit(batch(i++)); kotlinx.coroutines.delay(5) } }
+        }, 0) }, backoffMs = { 1 }, freeSpace = { free }, spaceCheckMs = 0, warnBytes = 200, stopBytes = 50)
+        s.start(LinkProfile(host = "192.168.42.2", pinnedFingerprint = "AA"), "1")
+        withTimeout(5000) { s.state.first { it is LinkState.Streaming } }
+        s.startRecording(file, "Acq")
+        free = 100
+        withTimeout(5000) { s.recording.first { it.lowSpace } }
+        free = 10
+        val stopped = withTimeout(5000) { s.recording.first { it.error != null } }
+        assertTrue(stopped.error!!.contains("spazio"))
+        assertEquals(null, stopped.file)
+        assertTrue(SfarReader(file.inputStream()).next() != null)
+        s.stop()
+    }
+}
