@@ -28,8 +28,9 @@ jobs:
           $exe = "windows-bridge/dist/SpaceLinkBridge.exe"
           (& $exe --help) -join "`n" | Select-String "Space Link Bridge" | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "--help fallito" }
+          # The runner has no phone: USB-only (default) would correctly keep the port closed, so listen on every adapter here.
           $data = Join-Path $env:RUNNER_TEMP "bridge-data"
-          $proc = Start-Process -FilePath $exe -ArgumentList "--data-dir", $data, "--port", "47811" -PassThru -RedirectStandardOutput "$data.out.txt" -RedirectStandardError "$data.err.txt"
+          $proc = Start-Process -FilePath $exe -ArgumentList "--data-dir", $data, "--port", "47811", "--all-interfaces" -PassThru -RedirectStandardOutput "$data.out.txt" -RedirectStandardError "$data.err.txt"
           Start-Sleep -Seconds 8
           $listening = $false
           try { $c = [System.Net.Sockets.TcpClient]::new("127.0.0.1", 47811); $listening = $c.Connected; $c.Dispose() } catch { }
