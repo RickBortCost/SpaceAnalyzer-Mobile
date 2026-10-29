@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import it.spaceanalyzer.mobile.SfaApp
+import it.spaceanalyzer.mobile.link.DEMO_HOST
 import it.spaceanalyzer.mobile.link.DiscoveredPc
 import it.spaceanalyzer.mobile.link.discoveryFlow
 import it.spaceanalyzer.mobile.link.fetchServerFingerprint
@@ -117,6 +118,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val context = getApplication<Application>()
         ContextCompat.startForegroundService(context, Intent(context, LinkService::class.java))
         session.start(p, _accessCode.value)
+    }
+
+    /** Local simulated source: no PC needed. Clearly labelled everywhere it appears. */
+    fun connectDemo() {
+        _message.value = null
+        val context = getApplication<Application>()
+        ContextCompat.startForegroundService(context, Intent(context, LinkService::class.java))
+        session.start(LinkProfile(name = "Prova", host = DEMO_HOST), "")
     }
 
     fun disconnect() { session.stop(); refreshRecordings() }
