@@ -31,7 +31,10 @@ Beacon **UDP broadcast** ogni ~2 s sulla porta **47810** verso `255.255.255.255`
 `{"sfa":1,"name":"PC-Laboratorio","port":47800}`.
 È solo un suggerimento per precompilare indirizzo e porta (l'indirizzo è quello sorgente del pacchetto): la fiducia deriva dall'abbinamento. Il client accetta solo sorgenti IPv4 private o link-local.
 
-## Implementazione di riferimento (Space, C#)
+## Eseguibile esterno (`windows-bridge/`)
+`SpaceLinkBridge.exe` implementa il server senza toccare Space: legge i segnali dalla API locale di Space e li serve con questo protocollo (stesso `.proto`, incluso con `Link` dal file dell'app). Vedi `windows-bridge/README.md`. Gli `id` dei segnali sono assegnati dal ponte in ordine di comparsa e restano stabili finché il ponte è in esecuzione; se cambia l'elenco dei segnali in Space, i flussi aperti terminano con `UNAVAILABLE` e il telefono si riconnette ricaricando l'elenco.
+
+## Implementazione integrata in Space (C#)
 Il server è implementato in Space Fieldbus Analyzer (repository `SpaceFieldbusAnalyzer_Free`, cartella `source/app/SpaceAnalyzer/MobileLink/`, guida `source/GUIDA_COLLEGAMENTO_MOBILE.md`): host Kestrel separato dall'interfaccia web, certificato autofirmato, codice di accesso da 8 cifre con blocco dopo 5 tentativi errati al minuto, annuncio UDP da ogni interfaccia, ripresa con buffer di 6000 batch. Il file `.proto` è lo stesso (con in più `option csharp_namespace`, ignorata da Kotlin). Il client Android reale è stato provato contro questo server su Linux.
 
 ## Schema .NET (indicativo)

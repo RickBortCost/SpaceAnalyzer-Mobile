@@ -19,7 +19,7 @@ Dalla pagina Collega l'app può generare segnali simulati sul telefono (nessun P
 ## NON verificato
 - Esecuzione su telefono fisico o emulatore (nessuno disponibile nell'ambiente di sviluppo): UI, servizio in primo piano, Keystore, file picker, comportamento del tethering USB sui modelli reali.
 - Il **release minificato (R8)** compila ma non è mai stato eseguito: provarlo prima di distribuirlo. È presente una regola keep per le classi del protocollo.
-- Il **lato Windows**: il server in Space è stato scritto (C#, repository `SpaceFieldbusAnalyzer_Free`) e provato su Linux contro il client Android reale e contro i propri test automatici. Non è stato provato su Windows (firewall, certificato con lo stack TLS di Windows) né con un telefono in tethering USB reale.
+- Il **lato Windows** (eseguibile `windows-bridge/`, che legge da Space dall'esterno): provato su Linux con Space vero + server OPC UA di prova, un client Python e il client Android reale; l'exe non è mai stato eseguito su Windows. In alternativa il server integrato in Space (sotto). Il server integrato: il server in Space è stato scritto (C#, repository `SpaceFieldbusAnalyzer_Free`) e provato su Linux contro il client Android reale e contro i propri test automatici. Non è stato provato su Windows (firewall, certificato con lo stack TLS di Windows) né con un telefono in tethering USB reale.
 - Prestazioni con carichi elevati (migliaia di campioni/s), prove di durata, consumo batteria.
 - Il workflow GitHub Actions della 0.2.0 è riuscito sulla PR #1 (incluso l'avvio su emulatore Android 10); i log dei singoli passi non sono stati riletti.
 

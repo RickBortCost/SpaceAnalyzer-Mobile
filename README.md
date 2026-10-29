@@ -2,7 +2,7 @@
 
 App Android nativa (Kotlin + Compose) che si collega via USB al PC con Space Fieldbus Analyzer, **visualizza i segnali in tempo reale e li registra sul telefono**. L'acquisizione (OPC UA, MQTT, bus di campo) resta sul PC; il telefono è un client in sola ricezione.
 
-**Stato:** prima release. Client, protocollo, registrazione e UI sono compilati e coperti da test automatici sul computer di sviluppo. **Non è ancora stata provata su un telefono fisico né con il lato Windows di Space** (il server è nel repository `SpaceFieldbusAnalyzer_Free`, funzione «Collegamento mobile»; specifica in `docs/PROTOCOL.md`). Vedere `docs/STATUS.md`.
+**Stato:** prima release. Client, protocollo, registrazione e UI sono compilati e coperti da test automatici sul computer di sviluppo. **Non è ancora stata provata su un telefono fisico né con il lato Windows di Space** (lato PC: `windows-bridge/`, eseguibile che si collega a Space dall'esterno; in alternativa il server integrato in Space, repository `SpaceFieldbusAnalyzer_Free`; specifica in `docs/PROTOCOL.md`). Vedere `docs/STATUS.md`.
 
 ## Funzioni
 - **Collegamento** al PC su TCP: gRPC (HTTP/2 + Protobuf) con TLS e certificato fissato dall'utente (nessuna CA, nessun «accetta tutto»), codice di accesso nel Keystore Android, ricerca automatica dei PC tramite beacon UDP.
@@ -20,6 +20,8 @@ App Android nativa (Kotlin + Compose) che si collega via USB al PC con Space Fie
 2. In Space avviare il servizio di collegamento mobile: mostra codice di accesso e impronta del certificato.
 3. Nell'app: pagina **Collega** → scegliere il PC trovato (o digitare l'IPv4), inserire il codice → **Salva** → **Verifica PC** → confrontare l'impronta con quella del PC → **Coincide**.
 4. **Connetti**. Pagina **Live** per i segnali, **Registra** per salvare; **Registrazioni** per esportare.
+
+Sul PC: **`windows-bridge/SpaceLinkBridge.exe`**, un eseguibile separato che legge i segnali da Space dall'esterno (senza modificarlo) e li serve al telefono; vedi `windows-bridge/README.md`.
 
 Senza il lato Windows e senza installare nulla sul PC si può provare l'app dalla pagina **Collega** → **Modalità prova**: segnali simulati generati sul telefono, segnalati come «DATI SIMULATI» in Live e nell'intestazione delle registrazioni. In alternativa, `tools/sfa_dev_server.py` è un server di prova da PC (richiede Python; mai incluso nell'APK).
 

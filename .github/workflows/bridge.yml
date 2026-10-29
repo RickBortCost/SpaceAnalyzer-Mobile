@@ -1,0 +1,44 @@
+name: Space Link Bridge
+on:
+  push:
+    paths: ['windows-bridge/**', 'app/src/main/proto/**', '.github/workflows/bridge.yml']
+  pull_request:
+    paths: ['windows-bridge/**', 'app/src/main/proto/**', '.github/workflows/bridge.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    # The tests run on Windows on purpose: TLS with the certificate saved as PFX, Kestrel HTTP/2 and the UDP
+    # announcement use the Windows stack there, which Linux cannot prove.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Tests (Windows)
+        run: dotnet test windows-bridge/SpaceLinkBridge.Tests/SpaceLinkBridge.Tests.csproj -c Release
+      - name: Publish SpaceLinkBridge.exe (win-x64, self-contained)
+        run: dotnet publish windows-bridge/SpaceLinkBridge/SpaceLinkBridge.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o windows-bridge/dist
+      - name: Smoke test of the published exe
+        shell: pwsh
+        run: |
+          $exe = "windows-bridge/dist/SpaceLinkBridge.exe"
+          (& $exe --help) -join "`n" | Select-String "Space Link Bridge" | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "--help fallito" }
+          $data = Join-Path $env:RUNNER_TEMP "bridge-data"
+          $proc = Start-Process -FilePath $exe -ArgumentList "--data-dir", $data, "--port", "47811" -PassThru -RedirectStandardOutput "$data.out.txt" -RedirectStandardError "$data.err.txt"
+          Start-Sleep -Seconds 8
+          $listening = $false
+          try { $c = [System.Net.Sockets.TcpClient]::new("127.0.0.1", 47811); $listening = $c.Connected; $c.Dispose() } catch { }
+          if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          Get-Content "$data.out.txt" -ErrorAction SilentlyContinue | Select-Object -First 20
+          Get-Content "$data.err.txt" -ErrorAction SilentlyContinue | Select-Object -First 20
+          if (-not $listening) { throw "Il ponte non ascolta sulla porta 47811" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpaceLinkBridge-win-x64
+          path: windows-bridge/dist/SpaceLinkBridge.exe
+          if-no-files-found: error

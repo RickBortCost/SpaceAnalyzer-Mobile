@@ -36,6 +36,18 @@ class SourceContract(unittest.TestCase):
         # The only trust manager that accepts any certificate is the pairing probe, which sends no data.
         tls = (SRC / 'it/spaceanalyzer/mobile/link/PinnedTls.kt').read_text()
         self.assertEqual(tls.count('X509TrustManager {'), 2)
+    def test_bridge_reads_space_with_a_fixed_set_of_read_routes(self):
+        import re
+        src = (ROOT / 'windows-bridge/SpaceLinkBridge/Space/SpaceClient.cs').read_text()
+        routes = set(re.findall(r'"(/api/[a-z/-]+)"', src))
+        self.assertEqual(routes, {'/api/status', '/api/config', '/api/live/samples'})
+        for forbidden in ['HttpMethod.Put', 'HttpMethod.Delete', 'HttpMethod.Patch', '/api/select', '/api/connect', '/api/record']:
+            self.assertNotIn(forbidden, src)
+        self.assertEqual(src.count('HttpMethod.Post'), 1)
+        self.assertIn('IsLoopback', src)
+        # the bridge has no operation that writes towards the phone or Space either
+        proto = (ROOT / 'app/src/main/proto/sfa_link.proto').read_text()
+        self.assertEqual(re.findall(r'rpc (\w+)\(', proto), ['Hello', 'ListSignals', 'Subscribe'])
     def test_offline_ethernet_binding_precedes_connect(self):
         source = (SRC / 'it/spaceanalyzer/mobile/networking/NetworkRepository.kt').read_text()
         self.assertNotIn('.clearCapabilities()', source)

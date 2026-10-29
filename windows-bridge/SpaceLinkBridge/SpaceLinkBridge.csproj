@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Standalone Windows executable: serves the SFA Link protocol to the Android app and reads the Live data from a running Space Fieldbus Analyzer through its local API. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>SpaceLinkBridge</AssemblyName>
+    <RootNamespace>SpaceLinkBridge</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>Space Link Bridge</Product>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+    <!-- Publish: self-contained single compressed .exe for Windows x64 (no .NET to install). -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
+    <!-- Single source of truth for the protocol: the file used by the Android app. -->
+    <Protobuf Include="../../app/src/main/proto/sfa_link.proto" Link="Protos/sfa_link.proto" GrpcServices="Both" />
+  </ItemGroup>
+</Project>
