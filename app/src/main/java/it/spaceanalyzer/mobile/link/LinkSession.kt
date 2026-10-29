@@ -16,7 +16,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-data class RecordingState(val file: File? = null, val samples: Long = 0, val error: String? = null)
+data class RecordingState(val file: File? = null, val samples: Long = 0, val error: String? = null, val lowSpace: Boolean = false)
 
 /**
  * Owns the connection to the PC, reconnects with exponential backoff and resumes the stream
@@ -27,7 +27,11 @@ class LinkSession(
     private val clientFactory: (LinkProfile, String) -> LinkClient,
     private val clock: () -> Long = System::currentTimeMillis,
     private val backoffMs: (Int) -> Long = { attempt -> (1000L shl (attempt - 1).coerceAtMost(3)) },
-    private val trendCapacity: Int = 5000
+    private val trendCapacity: Int = 5000,
+    private val freeSpace: (File) -> Long = { it.usableSpace },
+    private val spaceCheckMs: Long = 2000,
+    private val warnBytes: Long = 200L shl 20,
+    private val stopBytes: Long = 50L shl 20
 ) {
     private val _state = MutableStateFlow<LinkState>(LinkState.Idle)
     val state: StateFlow<LinkState> = _state.asStateFlow()
@@ -43,6 +47,7 @@ class LinkSession(
     private val rings = HashMap<Int, Ring>()
     private var job: Job? = null
     private var writer: SfarWriter? = null
+    private var lastSpaceCheck = 0L
 
     fun trend(signalId: Int): Series? = synchronized(rings) { rings[signalId] }?.snapshot()
 
@@ -134,6 +139,16 @@ class LinkSession(
                 try {
                     w.append(batch.samplesList)
                     _recording.value = _recording.value.copy(samples = _recording.value.samples + n)
+                    if (now - lastSpaceCheck >= spaceCheckMs) {
+                        lastSpaceCheck = now
+                        val free = freeSpace(w.file)
+                        if (free < stopBytes) {
+                            writer = null
+                            runCatching { w.close() }
+                            _recording.value = RecordingState(samples = _recording.value.samples,
+                                error = "Registrazione fermata: spazio libero sul telefono inferiore a ${stopBytes shr 20} MB. I dati registrati finora sono salvi.")
+                        } else _recording.value = _recording.value.copy(lowSpace = free < warnBytes)
+                    }
                 } catch (e: Exception) {
                     writer = null
                     runCatching { w.close() }

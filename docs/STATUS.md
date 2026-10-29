@@ -1,4 +1,4 @@
-# Stato — 0.2.0 (28 ottobre 2026)
+# Stato — 0.2.0 (29 ottobre 2026)
 
 ## Verificato sul computer di sviluppo (Linux, JDK 21, Gradle 8.13, SDK 36)
 - `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease`: **BUILD SUCCESSFUL**.
@@ -9,6 +9,9 @@
 - **Interoperabilità** con un server indipendente (Python/grpcio, `tools/sfa_dev_server.py`): abbinamento, autenticazione, stream, ripresa senza gap e rifiuto del codice errato — passata. Nel CI è un passo obbligatorio.
 - Lint: 0 errori. Controlli strutturali Python: 6 passati (sola lettura del protocollo, nessun «accetta tutto», permessi attesi).
 - APK debug `app/build/outputs/apk/debug/app-debug.apk` (versionCode 3, minSdk 29, targetSdk 36, arm64-v8a + x86_64) e release minificato non firmato (≈3,3 MB).
+
+## Rifiniture
+Zoom/scorrimento/cursore sul grafico, indicatore di registrazione in ogni pagina, avviso e arresto per spazio esaurito (testato con un test automatico), icona, tavolozza colori di Space (`SpaceFieldbusAnalyzer_Free`, `source/static/corporate.css` e `trend.js`). Gesti, colori e icona **non sono stati visti su schermo** (nessun telefono o emulatore disponibile): da controllare sul Note 9 in tema chiaro e scuro.
 
 ## Modalità prova
 Dalla pagina Collega l'app può generare segnali simulati sul telefono (nessun PC). Prova interfaccia, grafico, registrazione ed esportazione, ma **non** il collegamento reale (TLS, USB, gRPC), che è coperto solo dai test automatici.

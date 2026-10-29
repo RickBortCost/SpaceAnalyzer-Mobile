@@ -6,11 +6,13 @@ App Android nativa (Kotlin + Compose) che si collega via USB al PC con Space Fie
 
 ## Funzioni
 - **Collegamento** al PC su TCP: gRPC (HTTP/2 + Protobuf) con TLS e certificato fissato dall'utente (nessuna CA, nessun «accetta tutto»), codice di accesso nel Keystore Android, ricerca automatica dei PC tramite beacon UDP.
-- **Live**: valori, qualità, indicazione di dato obsoleto (> 5 s), grafico multi-segnale con finestra 10 s–5 min, pausa, decimazione min/max per pixel.
+- **Live**: valori, qualità, indicazione di dato obsoleto (> 5 s), grafico multi-segnale con zoom a pizzico (2 s–10 min), scorrimento a trascinamento, ritorno al live, cursore con valori all'istante, etichette di scala, pausa, decimazione min/max per pixel.
+- **Indicatore di registrazione** sempre visibile in testa a ogni pagina; avviso di spazio quasi esaurito (< 200 MB) e arresto automatico sotto 50 MB, con i dati già scritti salvi.
 - **Registrazione** locale in formato SFAR (append-only, tollerante a spegnimenti improvvisi, flush ogni secondo), esportazione dell'originale o in CSV tramite il selettore file di Android (nessun permesso di archiviazione).
 - **Riconnessione** automatica con backoff e ripresa dall'ultimo numero di sequenza; le interruzioni non recuperabili sono contate e mostrate.
 - **Servizio in primo piano** (notifica) per continuare ricezione e registrazione a schermo spento.
 - **Rete**: interfacce del telefono, utile per verificare il tethering USB.
+- **Aspetto**: gamma colori di Space Fieldbus Analyzer (chiara e scura, serie dei grafici incluse), ripresa da `corporate.css` e `trend.js` del progetto desktop; icona dell'app.
 - Sola lettura: il protocollo non contiene alcuna operazione di scrittura o comando verso il PC.
 
 ## Uso

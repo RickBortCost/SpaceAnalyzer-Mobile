@@ -24,7 +24,7 @@ const val SFAR_VERSION = 1
 const val SFAR_RECORD_BYTES = 24
 private val MAGIC = byteArrayOf('S'.code.toByte(), 'F'.code.toByte(), 'A'.code.toByte(), 'R'.code.toByte())
 
-class SfarWriter(file: File, acquisition: String, signals: List<SignalInfo>, startedAtMs: Long) : AutoCloseable {
+class SfarWriter(val file: File, acquisition: String, signals: List<SignalInfo>, startedAtMs: Long) : AutoCloseable {
     private val raw = FileOutputStream(file)
     private val out = DataOutputStream(BufferedOutputStream(raw, 64 * 1024))
     private var lastSync = System.nanoTime()
