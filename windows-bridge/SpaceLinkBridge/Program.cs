@@ -17,9 +17,11 @@ public static class Program
           --poll-ms <n>       intervallo di lettura da Space, 20-1000 ms (predefinito 100)
           --data-dir <cartella>  impostazioni e certificato (predefinita %LOCALAPPDATA%\SpaceLinkBridge)
           --new-code          genera subito un nuovo codice di accesso
+          --all-interfaces    ascolta su tutte le schede di rete del PC (predefinito: solo l'adattatore USB del telefono)
+          --usb-only          torna alla modalità solo USB (predefinita)
           -h, --help          questa guida
 
-        Tasti: N = nuovo codice di accesso, Q = esci.
+        Tasti: N = nuovo codice di accesso, U = alterna «solo USB» / «tutte le schede», Q = esci.
         """;
 
     public static async Task<int> Main(string[] args)
@@ -28,6 +30,7 @@ public static class Program
         int? port = null;
         var pollMs = 100;
         var newCode = false;
+        bool? usbOnly = null;
         try
         {
             for (var i = 0; i < args.Length; i++)
@@ -40,6 +43,8 @@ public static class Program
                     case "--poll-ms": pollMs = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                     case "--data-dir": dataDir = Next(); break;
                     case "--new-code": newCode = true; break;
+                    case "--all-interfaces": usbOnly = false; break;
+                    case "--usb-only": usbOnly = true; break;
                     case "-h" or "--help": Console.WriteLine(Usage); return 0;
                     default: throw new ArgumentException($"Opzione sconosciuta: {args[i]}");
                 }
@@ -64,6 +69,7 @@ public static class Program
         {
             if (port is int p) await manager.SetPortAsync(p);
             if (newCode) await manager.RotateCodeAsync();
+            if (usbOnly is bool u) await manager.SetUsbOnlyAsync(u);
             await manager.SetEnabledAsync(true);
         }
         catch (BridgeException exc)
@@ -87,7 +93,9 @@ public static class Program
                     var key = Console.ReadKey(true).Key;
                     if (key == ConsoleKey.Q) stop.Cancel();
                     else if (key == ConsoleKey.N) { await manager.RotateCodeAsync(); Log("Nuovo codice di accesso generato"); }
+                    else if (key == ConsoleKey.U) { await manager.SetUsbOnlyAsync(!manager.UsbOnly); Log(manager.UsbOnly ? "Ascolto solo sull'adattatore USB del telefono" : "Ascolto su tutte le schede di rete"); }
                 }
+            await manager.RefreshAsync();
             var text = Render(manager, feeder.Status, log);
             if (text != last)
             {
@@ -104,6 +112,9 @@ public static class Program
     static string Render(MobileLinkManager manager, FeederStatus space, List<string> log)
     {
         var s = manager.Status();
+        var adapters = ((System.Text.Json.Nodes.JsonArray)s["adapters"]!).Select(n => n!.AsObject()).ToList();
+        string Describe(System.Text.Json.Nodes.JsonObject a) => $"{a["ip"]} [{(a["usb"]!.GetValue<bool>() ? "USB telefono" : a["name"])}]";
+        var usb = adapters.Where(a => a["usb"]!.GetValue<bool>()).ToList();
         var lines = new List<string>
         {
             $"Space Link Bridge {Version}",
@@ -111,16 +122,23 @@ public static class Program
             space.Connected
                 ? $"Space: collegato a {space.Url} (V{space.Version}) · {space.Signals} segnali · {space.SamplesPerSecond:F0} campioni/s"
                 : $"Space: NON collegato — {space.Error}",
-            $"Telefono: in ascolto sulla porta {s["port"]} · telefoni collegati: {s["clients"]}",
+            manager.WaitingForUsb
+                ? "Telefono: IN ATTESA del collegamento USB — collegare il cavo e attivare «Tethering USB» sul telefono"
+                : $"Telefono: in ascolto sulla porta {s["port"]} ({string.Join(", ", ((System.Text.Json.Nodes.JsonArray)s["listening"]!).Select(x => x!.ToString()))}) · telefoni collegati: {s["clients"]}",
             "",
             $"Codice di accesso : {s["access_code"]}",
             $"Impronta (SHA-256): {s["fingerprint"]}",
-            $"Indirizzi del PC  : {string.Join(" · ", ((System.Text.Json.Nodes.JsonArray)s["addresses"]!).Select(a => a!.ToString()))}",
+            usb.Count > 0
+                ? $"Indirizzo da usare nell'app: {string.Join(" · ", usb.Select(a => a["ip"]!.ToString()))}   (trovato anche in automatico)"
+                : "Indirizzo da usare nell'app: nessun adattatore USB del telefono rilevato",
+            $"Altre schede del PC: {(adapters.Count == usb.Count ? "—" : string.Join(" · ", adapters.Where(a => !a["usb"]!.GetValue<bool>()).Select(Describe)))}",
+            $"Modalità: {(manager.UsbOnly ? "solo adattatore USB del telefono (Wi-Fi e rete aziendale non usati)" : "tutte le schede di rete")}",
             "",
             "Nell'app: Collega → scegliere il PC → inserire il codice → Verifica PC → confrontare l'impronta → Connetti.",
-            "Al primo avvio Windows chiede l'accesso al firewall: con il tethering USB spuntare anche le reti pubbliche.",
+            "Non serve il Wi-Fi né cambiare l'IP del telefono: nel tethering USB gli indirizzi li assegna Android.",
+            "Al primo avvio Windows chiede l'accesso al firewall: spuntare anche le reti pubbliche.",
             "",
-            "[N] nuovo codice   [Q] esci",
+            "[N] nuovo codice   [U] solo USB / tutte le schede   [Q] esci",
             "",
         };
         lock (log) lines.AddRange(log);

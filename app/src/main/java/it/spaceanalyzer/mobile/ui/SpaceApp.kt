@@ -103,8 +103,9 @@ private fun ConnectPage(vm: MainViewModel, connect: () -> Unit, demo: () -> Unit
     val active = state !is LinkState.Idle && state !is LinkState.Failed
 
     Text("Collegamento al PC", style = MaterialTheme.typography.titleLarge)
-    Text("1. Collegare il telefono al PC con il cavo USB e attivare «Tethering USB» nelle impostazioni Android.\n" +
-        "2. In Space avviare il servizio «Collegamento mobile»: mostra codice di accesso e impronta del certificato.")
+    Text("1. Collegare il telefono al PC con il cavo USB e attivare «Tethering USB» (Impostazioni → Connessioni → Hotspot e tethering). " +
+        "Il Wi-Fi non serve e l’IP del telefono non va modificato: lo assegna Android.\n" +
+        "2. Sul PC avviare SpaceLinkBridge.exe (o il servizio «Collegamento mobile» di Space): mostra codice di accesso, impronta e indirizzo da usare.")
     if (found.isNotEmpty() && !active) {
         Text("PC trovati sulla rete", style = MaterialTheme.typography.titleMedium)
         found.values.forEach { pc ->

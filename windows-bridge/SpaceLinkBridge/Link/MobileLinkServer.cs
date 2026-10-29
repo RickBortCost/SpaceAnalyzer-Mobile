@@ -19,7 +19,7 @@ public sealed class MobileLinkServer : IAsyncDisposable
 
     public int BoundPort { get; private set; }
 
-    public async Task StartAsync(IPAddress bind, int port, X509Certificate2 certificate, AccessGate gate, MobileLinkHub hub, Func<string> acquisitionName)
+    public async Task StartAsync(IReadOnlyList<IPAddress> binds, int port, X509Certificate2 certificate, AccessGate gate, MobileLinkHub hub, Func<string> acquisitionName)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
@@ -28,11 +28,12 @@ public sealed class MobileLinkServer : IAsyncDisposable
             options.AddServerHeader = false;
             options.Limits.Http2.KeepAlivePingDelay = TimeSpan.FromSeconds(15);
             options.Limits.Http2.KeepAlivePingTimeout = TimeSpan.FromSeconds(10);
-            options.Listen(bind, port, listen =>
-            {
-                listen.Protocols = HttpProtocols.Http2;
-                listen.UseHttps(certificate);
-            });
+            foreach (var bind in binds)
+                options.Listen(bind, port, listen =>
+                {
+                    listen.Protocols = HttpProtocols.Http2;
+                    listen.UseHttps(certificate);
+                });
         });
         builder.Services.AddSingleton(hub);
         builder.Services.AddSingleton(gate);

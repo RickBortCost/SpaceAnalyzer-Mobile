@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -18,19 +17,19 @@ public sealed class MobileLinkBeacon : IDisposable
     readonly CancellationTokenSource stop = new();
     readonly Task loop;
 
-    public MobileLinkBeacon(int linkPort, int beaconPort = DefaultPort)
+    public MobileLinkBeacon(int linkPort, Func<IEnumerable<LocalAddress>> addresses, int beaconPort = DefaultPort)
     {
         var payload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { sfa = 1, name = Environment.MachineName, port = linkPort }));
         loop = Task.Run(async () =>
         {
             while (!stop.IsCancellationRequested)
             {
-                foreach (var (local, broadcast) in Targets())
+                foreach (var target in addresses())
                 {
                     try
                     {
-                        using var udp = new UdpClient(new IPEndPoint(local, 0)) { EnableBroadcast = true };
-                        await udp.SendAsync(payload, new IPEndPoint(broadcast, beaconPort));
+                        using var udp = new UdpClient(new IPEndPoint(target.Ip, 0)) { EnableBroadcast = true };
+                        await udp.SendAsync(payload, new IPEndPoint(target.Broadcast, beaconPort));
                     }
                     catch (SocketException) { }
                     catch (ObjectDisposedException) { }
@@ -38,27 +37,6 @@ public sealed class MobileLinkBeacon : IDisposable
                 try { await Task.Delay(2000, stop.Token); } catch (OperationCanceledException) { }
             }
         });
-    }
-
-    /// <summary>(own address, directed broadcast address) of every usable IPv4 interface.</summary>
-    public static IEnumerable<(IPAddress Local, IPAddress Broadcast)> Targets()
-    {
-        NetworkInterface[] interfaces;
-        try { interfaces = NetworkInterface.GetAllNetworkInterfaces(); }
-        catch (NetworkInformationException) { yield break; }
-        foreach (var nic in interfaces)
-        {
-            if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
-            foreach (var address in nic.GetIPProperties().UnicastAddresses)
-            {
-                if (address.Address.AddressFamily != AddressFamily.InterNetwork || address.IPv4Mask == null) continue;
-                var ip = address.Address.GetAddressBytes();
-                var mask = address.IPv4Mask.GetAddressBytes();
-                var broadcast = new byte[4];
-                for (var i = 0; i < 4; i++) broadcast[i] = (byte)(ip[i] | ~mask[i]);
-                yield return (address.Address, new IPAddress(broadcast));
-            }
-        }
     }
 
     public void Dispose()

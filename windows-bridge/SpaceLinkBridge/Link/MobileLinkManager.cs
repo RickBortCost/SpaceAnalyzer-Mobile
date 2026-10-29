@@ -22,7 +22,10 @@ public sealed class MobileLinkManager : IDisposable
     readonly string settingsPath;
     readonly SemaphoreSlim gate = new(1, 1);
     readonly bool bindAny;
+    readonly Func<IReadOnlyList<LocalAddress>> adapters;
     bool enabled;
+    bool usbOnly = true;
+    IReadOnlyList<IPAddress> binds = Array.Empty<IPAddress>();
     int port = DefaultPort;
     string code;
     string error = "";
@@ -31,14 +34,17 @@ public sealed class MobileLinkManager : IDisposable
     X509Certificate2? certificate;
     AccessGate? access;
 
-    /// <param name="bindAny">Listen on every interface (the phone arrives through the USB-tethering adapter); tests use loopback.</param>
-    public MobileLinkManager(string dataDir, bool bindAny = true)
+    /// <param name="bindAny">Listen on the PC's network adapters; false = loopback only (tests).</param>
+    /// <param name="adapters">Source of the PC's IPv4 addresses (replaced in tests).</param>
+    public MobileLinkManager(string dataDir, bool bindAny = true, Func<IReadOnlyList<LocalAddress>>? adapters = null)
     {
+        this.adapters = adapters ?? NetworkAdapters.List;
         directory = Path.Combine(dataDir, "mobile_link");
         settingsPath = Path.Combine(directory, "settings.json");
         this.bindAny = bindAny;
         var saved = File.Exists(settingsPath) ? TryRead() : null;
         enabled = saved?["enabled"]?.GetValue<bool>() ?? false;
+        usbOnly = saved?["usb_only"]?.GetValue<bool>() ?? true;
         port = saved?["port"]?.GetValue<int>() is int p and >= 1024 and <= 65535 ? p : DefaultPort;
         code = saved?["access_code"]?.GetValue<string>() is { Length: >= 6 } c ? c : NewCode();
     }
@@ -55,7 +61,7 @@ public sealed class MobileLinkManager : IDisposable
     {
         Directory.CreateDirectory(directory);
         var temporary = settingsPath + ".tmp";
-        File.WriteAllText(temporary, new JsonObject { ["enabled"] = enabled, ["port"] = port, ["access_code"] = code }.ToJsonString());
+        File.WriteAllText(temporary, new JsonObject { ["enabled"] = enabled, ["port"] = port, ["access_code"] = code, ["usb_only"] = usbOnly }.ToJsonString());
         File.Move(temporary, settingsPath, overwrite: true);
     }
 
@@ -107,27 +113,39 @@ public sealed class MobileLinkManager : IDisposable
         finally { gate.Release(); }
     }
 
+    /// <summary>Where to listen: loopback in tests; the USB-tethering adapter(s) of the phone by default; every adapter if the user asked.</summary>
+    List<IPAddress> DesiredBinds()
+    {
+        if (!bindAny) return new() { IPAddress.Loopback };
+        if (!usbOnly) return new() { IPAddress.Any };
+        return adapters().Where(a => a.UsbPhone).Select(a => a.Ip).Distinct().ToList();
+    }
+
+    IEnumerable<LocalAddress> BeaconTargets() => usbOnly ? adapters().Where(a => a.UsbPhone) : adapters();
+
     async Task StartLocked()
     {
         if (server != null) return;
+        var wanted = DesiredBinds();
+        if (wanted.Count == 0) return;           // waiting for the USB adapter: RefreshAsync starts the server when it appears
         MobileLinkServer? starting = null;
         try
         {
-            certificate = MobileLinkCertificate.LoadOrCreate(directory);
+            certificate ??= MobileLinkCertificate.LoadOrCreate(directory);
             access = new AccessGate(code);
             starting = new MobileLinkServer();
             Hub.Active = true;
-            await starting.StartAsync(bindAny ? IPAddress.Any : IPAddress.Loopback, port, certificate, access, Hub, AcquisitionName);
+            await starting.StartAsync(wanted, port, certificate, access, Hub, AcquisitionName);
             server = starting;
-            beacon = bindAny ? new MobileLinkBeacon(starting.BoundPort) : null;
+            binds = wanted;
+            beacon = bindAny ? new MobileLinkBeacon(starting.BoundPort, BeaconTargets) : null;
             error = "";
-            Log($"In ascolto sulla porta {starting.BoundPort}");
+            Log($"In ascolto sulla porta {starting.BoundPort} ({string.Join(", ", wanted.Select(w => w.Equals(IPAddress.Any) ? "tutte le schede" : w.ToString()))})");
         }
         catch (Exception exc)
         {
             Hub.Active = false;
             if (starting != null) await starting.DisposeAsync();
-            certificate?.Dispose(); certificate = null;
             error = exc is IOException or System.Net.Sockets.SocketException or Microsoft.AspNetCore.Connections.AddressInUseException
                 ? $"Porta {port} non disponibile: {exc.Message}" : exc.Message;
             throw new BridgeException(error);
@@ -142,12 +160,51 @@ public sealed class MobileLinkManager : IDisposable
         Hub.Reset();
         if (server != null) await server.DisposeAsync();
         server = null;
-        certificate?.Dispose(); certificate = null;
+        binds = Array.Empty<IPAddress>();
         if (wasRunning) Log("Servizio fermato");
     }
 
+    /// <summary>Follows the adapters: starts when the phone's USB adapter appears, stops when it goes away, moves when its address changes.</summary>
+    public async Task RefreshAsync()
+    {
+        await gate.WaitAsync();
+        try
+        {
+            if (!enabled) return;
+            var wanted = DesiredBinds();
+            if (server == null) { if (wanted.Count > 0) await StartLocked(); return; }
+            if (wanted.Count == binds.Count && wanted.All(binds.Contains)) return;
+            await StopLocked();
+            if (wanted.Count > 0) await StartLocked();
+        }
+        catch (BridgeException) { }
+        finally { gate.Release(); }
+    }
+
+    /// <summary>true = listen only on the phone's USB adapter (default); false = every adapter of the PC.</summary>
+    public async Task SetUsbOnlyAsync(bool value)
+    {
+        await gate.WaitAsync();
+        try { usbOnly = value; Save(); }
+        finally { gate.Release(); }
+        await RefreshAsync();
+    }
+
+    public bool UsbOnly => usbOnly;
+    /// <summary>The service is on but no USB adapter of the phone exists yet.</summary>
+    public bool WaitingForUsb => enabled && server == null && bindAny && usbOnly && DesiredBinds().Count == 0;
+
     public int BoundPort => server?.BoundPort ?? port;
-    public string Fingerprint => certificate is { } c ? MobileLinkCertificate.Fingerprint(c) : "";
+    /// <summary>Known before the service starts (the phone's adapter may not exist yet), so the user can read it at once.</summary>
+    public string Fingerprint
+    {
+        get
+        {
+            try { certificate ??= MobileLinkCertificate.LoadOrCreate(directory); }
+            catch (Exception exc) when (exc is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException) { return ""; }
+            return MobileLinkCertificate.Fingerprint(certificate);
+        }
+    }
 
     public JsonObject Status() => new()
     {
@@ -158,13 +215,18 @@ public sealed class MobileLinkManager : IDisposable
         ["fingerprint"] = Fingerprint,
         ["clients"] = Hub.SubscriberCount,
         ["signals"] = Hub.Signals().Count,
-        ["addresses"] = new JsonArray(MobileLinkBeacon.Targets().Select(t => (JsonNode?)t.Local.ToString()).ToArray()),
+        ["addresses"] = new JsonArray(adapters().Select(a => (JsonNode?)a.Ip.ToString()).ToArray()),
+        ["adapters"] = new JsonArray(adapters().Select(a => (JsonNode?)new JsonObject { ["ip"] = a.Ip.ToString(), ["name"] = a.Name, ["description"] = a.Description, ["usb"] = a.UsbPhone }).ToArray()),
+        ["usb_only"] = usbOnly,
+        ["waiting_usb"] = WaitingForUsb,
+        ["listening"] = new JsonArray(binds.Select(b => (JsonNode?)(b.Equals(IPAddress.Any) ? "tutte" : b.ToString())).ToArray()),
         ["error"] = error,
     };
 
     public void Dispose()
     {
         try { SetEnabledAsync(false, remember: false).Wait(TimeSpan.FromSeconds(10)); } catch (Exception) { }
+        certificate?.Dispose(); certificate = null;
         gate.Dispose();
     }
 }

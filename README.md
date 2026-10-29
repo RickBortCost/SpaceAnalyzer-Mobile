@@ -21,7 +21,7 @@ App Android nativa (Kotlin + Compose) che si collega via USB al PC con Space Fie
 3. Nell'app: pagina **Collega** → scegliere il PC trovato (o digitare l'IPv4), inserire il codice → **Salva** → **Verifica PC** → confrontare l'impronta con quella del PC → **Coincide**.
 4. **Connetti**. Pagina **Live** per i segnali, **Registra** per salvare; **Registrazioni** per esportare.
 
-Sul PC: **`windows-bridge/SpaceLinkBridge.exe`**, un eseguibile separato che legge i segnali da Space dall'esterno (senza modificarlo) e li serve al telefono; vedi `windows-bridge/README.md`.
+Sul PC: **`windows-bridge/SpaceLinkBridge.exe`** (solo cavo USB: nessun Wi-Fi, nessun IP da impostare), un eseguibile separato che legge i segnali da Space dall'esterno (senza modificarlo) e li serve al telefono; vedi `windows-bridge/README.md`.
 
 Senza il lato Windows e senza installare nulla sul PC si può provare l'app dalla pagina **Collega** → **Modalità prova**: segnali simulati generati sul telefono, segnalati come «DATI SIMULATI» in Live e nell'intestazione delle registrazioni. In alternativa, `tools/sfa_dev_server.py` è un server di prova da PC (richiede Python; mai incluso nell'APK).
 
